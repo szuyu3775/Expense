@@ -4,10 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>致理資教職輔計畫經費控管系統</title>
+    <!-- 1. 載入樣式工具 (Tailwind) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- 2. 載入 React 核心 (網頁引擎) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 3. 載入翻譯機 (Babel)，讓瀏覽器看懂您的程式碼 -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
+    <!-- 設定 Tailwind 自定義動畫 -->
     <script>
         tailwind.config = {
             theme: {
@@ -26,14 +33,14 @@
     </script>
 </head>
 <body class="bg-slate-50 text-slate-800">
+    <!-- 這是 React 程式顯示的「掛載點」 -->
     <div id="root"></div>
 
+    <!-- ★★★ 主程式碼開始 ★★★ -->
     <script type="text/babel" data-type="module">
-        // --- 修正重點：全部統一從 esm.sh 匯入，確保版本一致且支援模組語法 ---
-        import React, { useState, useEffect, useMemo, useCallback } from 'https://esm.sh/react@18.2.0';
-        import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+        const { useState, useEffect, useMemo, useCallback } = React;
         
-        // 從網路上載入圖示庫 (指定依賴 react 18)
+        // 從網路上載入圖示庫
         import { 
             PlusCircle, Wallet, FileText, AlertCircle, Save, X, Table, Trash2, Plus, 
             CheckCircle2, Calendar, Hash, ClipboardList, Coins, Archive, ChevronDown, 
@@ -42,7 +49,7 @@
         } from 'https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0';
 
         // --- 設定區 ---
-        // 您的 GAS 後端網址
+        // 您的 GAS 後端網址 (已確認為最新版)
         const API_URL = 'https://script.google.com/macros/s/AKfycbwCT-oLJM6dILv0Lt5J8mH4PhuQ8dyEBvM0VlUpQQqKZek2y4A5arax52eoFsIIQ9gg/exec'; 
 
         // --- 常數定義 ---
@@ -59,7 +66,7 @@
             // 安全性與登入狀態
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [inputCode, setInputCode] = useState('');
-            const [authKey, setAuthKey] = useState(''); 
+            const [authKey, setAuthKey] = useState(''); // 修正：需要儲存真正的金鑰
             const [isVerifying, setIsVerifying] = useState(false);
 
             const [activeTab, setActiveTab] = useState('dashboard');
@@ -95,11 +102,12 @@
             const [expandedGroups, setExpandedGroups] = useState({});
             const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', items: [], inputValue: '' });
 
-            // --- API 連線邏輯 ---
+            // --- API 連線邏輯 (修正版：加入 authCode) ---
             const fetchAllData = useCallback(async (key) => {
                 if (!API_URL) return false;
                 setIsLoading(true);
                 try {
+                    // 修正：在 URL 中帶入 authCode 參數
                     const [transRes, budgetRes] = await Promise.all([
                         fetch(`${API_URL}?type=transactions&authCode=${key}`),
                         fetch(`${API_URL}?type=budgets&authCode=${key}`)
@@ -108,6 +116,7 @@
                     const transResponse = await transRes.json();
                     const budgetResponse = await budgetRes.json();
 
+                    // 檢查後端是否回傳錯誤 (例如密碼錯誤)
                     if (transResponse.status === 'error' || budgetResponse.status === 'error') {
                         throw new Error(transResponse.message || '存取被拒絕，請檢查密碼');
                     }
@@ -132,14 +141,14 @@
                     setTransactions(safeTransData);
                     setYearlyBudgets(safeBudgetData);
                     setDataLoaded(true);
-                    return true; 
+                    return true; // 成功
                 } catch (error) {
                     console.error('Fetch Error:', error);
                     if (isAuthenticated) {
-                          showNotification(error.message.includes('密碼') ? '密碼錯誤，存取被拒' : '連線失敗，請檢查網路', 'error');
+                         showNotification(error.message.includes('密碼') ? '密碼錯誤，存取被拒' : '連線失敗，請檢查網路', 'error');
                     }
                     if (error.message.includes('密碼') || error.message.includes('拒絕')) {
-                        handleLogout(); 
+                        handleLogout(); // 密碼錯就登出
                     }
                     return false;
                 } finally {
@@ -149,16 +158,11 @@
 
             const postToGAS = async (action, data) => {
                 try {
+                    // 修正：POST 請求也要帶上 authCode
                     const response = await fetch(API_URL, {
                         method: 'POST',
-                        body: JSON.stringify({ action, data, authCode: authKey }), // 使用 POST 傳輸，確保 body 格式正確
+                        body: JSON.stringify({ action, data, authCode: authKey }),
                     });
-                    
-                    // 檢查回應是否為 OK
-                    if (!response.ok) {
-                        throw new Error(`HTTP Error: ${response.status}`);
-                    }
-
                     const result = await response.json();
                     if (result.status === 'error') {
                         throw new Error(result.message);
@@ -166,7 +170,7 @@
                     return true;
                 } catch (error) {
                     console.error('Post Error:', error);
-                    showNotification('連線錯誤: ' + error.message, 'error');
+                    showNotification(error.message, 'error');
                     return false;
                 }
             };
@@ -180,15 +184,16 @@
                 }
                 setIsVerifying(true);
                 
+                // 嘗試用輸入的密碼去跟 Google 拿資料
                 const success = await fetchAllData(inputCode);
                 
                 if (success) {
                     setIsAuthenticated(true);
-                    setAuthKey(inputCode); 
+                    setAuthKey(inputCode); // 記住這把正確的鑰匙
                     localStorage.setItem('expense_app_key', inputCode);
                     showNotification('登入成功', 'success');
                 } else {
-                    alert('密碼錯誤或無法連線');
+                    alert('密碼錯誤，請重新輸入 (預設為 2025-Admin-Key)');
                 }
                 setIsVerifying(false);
             };
@@ -290,10 +295,11 @@
                 });
 
                 const getMonthNum = (m) => parseInt(m.replace('月份', '')) || 0;
+                const STATUS_ORDER = { '未核銷': 0, '送核銷': 1, '已歸檔': 2 };
+
                 const result = Object.values(groups).sort((a, b) => {
                     const monthDiff = getMonthNum(b.month) - getMonthNum(a.month); 
                     if (monthDiff !== 0) return monthDiff;
-                    const STATUS_ORDER = { '未核銷': 0, '送核銷': 1, '已歸檔': 2 };
                     return (STATUS_ORDER[a.status] || 0) - (STATUS_ORDER[b.status] || 0);
                 });
 
@@ -480,7 +486,7 @@
                             <div className="flex flex-col items-center mb-6">
                                 <div className="bg-blue-600 p-3 rounded-xl mb-3 shadow-lg shadow-blue-200"><Wallet className="h-8 w-8 text-white" /></div>
                                 <h2 className="text-xl font-bold text-slate-800">致理資教職輔計畫</h2>
-                                <p className="text-sm text-slate-500">經費控管系統 (Secure)</p>
+                                <p className="text-sm text-slate-500">經費控管系統</p>
                             </div>
                             <form onSubmit={handleLogin} className="space-y-4">
                                 <div>
@@ -503,7 +509,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.1.3</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.1.4 | 更新時間：2025/11/22 15:30</p>
                             </div>
                         </div>
                     </div>
@@ -579,7 +585,7 @@
                                         <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-1 ${activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                                             {tab === 'dashboard' && '總表儀表板'}
                                             {tab === 'entry' && '新增支出'}
-                                            {tab === 'log' && '明細查詢'}
+                                            {tab === 'log' && '明細紀錄'}
                                             {tab === 'settings' && <><Settings className="w-4 h-4" /> 預算設定</>}
                                         </button>
                                     ))}
@@ -620,78 +626,348 @@
 
                         {!dataLoaded ? (
                             <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                                <p>請輸入密碼以存取資料庫...</p>
+                                <p>請先設定 API 網址並確保 Google 試算表已建立...</p>
                             </div>
                         ) : (
                             <>
-                                {/* Settings Tab, Dashboard Tab, Entry Tab, Log Tab 的內容與邏輯相同，維持 React Component 渲染即可 */}
                                 {activeTab === 'settings' && (
                                     <div className="max-w-3xl mx-auto animate-fade-in">
-                                         {/* 簡化顯示：與原程式邏輯相同 */}
-                                         <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden p-6">
-                                            {projects.map(proj => {
-                                                const budget = yearlyBudgets.find(b => Number(b.year) === currentYear && Number(b.projectId) === proj.id)?.amount || 0;
-                                                return (
-                                                    <div key={`${proj.id}-${currentYear}`} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200 mb-2">
-                                                        <div><p className="font-medium">{proj.name}</p></div>
-                                                        <input type="text" defaultValue={budget.toLocaleString()} onBlur={(e) => { const rawValue = e.target.value.replace(/,/g, ''); if (!isNaN(rawValue) && rawValue !== '') { handleBudgetUpdate(proj.id, rawValue); e.target.value = Number(rawValue).toLocaleString(); } }} className="w-32 text-right font-bold text-slate-800 rounded border-slate-300" />
+                                        <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
+                                            <div className="bg-slate-700 px-6 py-4 text-white flex justify-between items-center">
+                                                <h3 className="font-bold text-lg flex items-center gap-2"><Settings className="h-5 w-5" /> {currentYear}年度 預算設定</h3>
+                                                <span className="text-xs bg-slate-600 px-2 py-1 rounded">修改後自動儲存 (失去焦點時)</span>
+                                            </div>
+                                            <div className="p-6 space-y-3">
+                                                {projects.map(proj => {
+                                                    const budget = yearlyBudgets.find(b => Number(b.year) === currentYear && Number(b.projectId) === proj.id)?.amount || 0;
+                                                    return (
+                                                        <div key={`${proj.id}-${currentYear}`} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className="font-medium text-slate-800">{proj.name}</p>
+                                                                    <span className={`text-[10px] px-2 py-0.5 rounded ${proj.type === 'subsidy' ? 'bg-blue-100 text-blue-900' : 'bg-sky-100 text-sky-600'}`}>{proj.type === 'subsidy' ? '補助款' : '配合款'}</span>
+                                                                </div>
+                                                                <p className="text-xs text-slate-500 mt-1">{proj.description}</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-slate-400">$</span>
+                                                                <input type="text" defaultValue={budget ? budget.toLocaleString() : ''} onBlur={(e) => { const rawValue = e.target.value.replace(/,/g, ''); if (!isNaN(rawValue) && rawValue !== '') { handleBudgetUpdate(proj.id, rawValue); e.target.value = Number(rawValue).toLocaleString(); } }} onFocus={(e) => e.target.select()} className="w-32 text-right font-bold text-slate-800 rounded border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                <div className="mt-6 pt-4 border-t border-slate-100 flex justify-end">
+                                                    <div className="text-right">
+                                                        <p className="text-sm text-slate-500">年度預算總計</p>
+                                                        <p className="text-2xl font-bold text-blue-600">{formatCurrency(yearlyBudgets.filter(b => Number(b.year) === currentYear).reduce((sum, b) => sum + Number(b.amount), 0))}</p>
                                                     </div>
-                                                );
-                                            })}
-                                         </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
 
                                 {activeTab === 'dashboard' && (
                                     <div className="space-y-6 animate-fade-in">
-                                        {/* Dashboard 內容 (這裡簡化渲染，實際程式碼會自動展開上方邏輯) */}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-900"><h4 className="text-blue-900 font-bold">補助款剩餘: {formatCurrency(summaryStats.subsidy.remaining)}</h4></div>
-                                            <div className="bg-white p-6 rounded-xl shadow-sm border border-sky-300"><h4 className="text-sky-600 font-bold">配合款剩餘: {formatCurrency(summaryStats.matching.remaining)}</h4></div>
+                                            <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-900 relative overflow-hidden">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <h4 className="text-blue-900 font-bold">補助款</h4>
+                                                    <div className={`text-2xl font-bold ${summaryStats.subsidy.remaining < 0 ? 'text-red-600' : 'text-blue-900'}`}>{formatCurrency(summaryStats.subsidy.remaining)}<span className="text-xs text-slate-400 font-normal ml-1">剩餘</span></div>
+                                                </div>
+                                                <div className="w-full bg-slate-100 rounded-full h-2 mb-2"><div className={`h-2 rounded-full ${summaryStats.subsidy.ratio > 100 ? 'bg-red-500' : 'bg-blue-800'}`} style={{ width: `${Math.min(summaryStats.subsidy.ratio, 100)}%` }}></div></div>
+                                                <div className="flex justify-between text-xs text-slate-500"><span>已用: {formatCurrency(summaryStats.subsidy.used)}</span><span>總額: {formatCurrency(summaryStats.subsidy.budget)}</span></div>
+                                            </div>
+                                            <div className="bg-white p-6 rounded-xl shadow-sm border border-sky-300 relative overflow-hidden">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <h4 className="text-sky-600 font-bold">配合款</h4>
+                                                    <div className={`text-2xl font-bold ${summaryStats.matching.remaining < 0 ? 'text-red-600' : 'text-sky-600'}`}>{formatCurrency(summaryStats.matching.remaining)}<span className="text-xs text-slate-400 font-normal ml-1">剩餘</span></div>
+                                                </div>
+                                                <div className="w-full bg-slate-100 rounded-full h-2 mb-2"><div className={`h-2 rounded-full ${summaryStats.matching.ratio > 100 ? 'bg-red-500' : 'bg-sky-400'}`} style={{ width: `${Math.min(summaryStats.matching.ratio, 100)}%` }}></div></div>
+                                                <div className="flex justify-between text-xs text-slate-500"><span>已用: {formatCurrency(summaryStats.matching.used)}</span><span>總額: {formatCurrency(summaryStats.matching.budget)}</span></div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden">
+                                            <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-100">
+                                                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Table className="h-5 w-5 text-slate-600" /> 計畫執行狀況 ({currentYear}年)</h3>
+                                                <div className="flex gap-2 text-xs">
+                                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> 超支 (&gt;120%)</span>
+                                                </div>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm text-left border-collapse">
+                                                    <thead className="text-xs text-slate-700 uppercase bg-slate-200 border-b border-slate-300">
+                                                        <tr>
+                                                            <th className="px-4 py-3 border-r border-slate-300 min-w-[140px]">計畫經費項目</th>
+                                                            <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px]">總計(預算)</th>
+                                                            <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px]">支出總計</th>
+                                                            <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px] font-bold">剩餘金額</th>
+                                                            <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">執行率</th>
+                                                            <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">流用狀態</th>
+                                                            <th className="px-4 py-3 text-right border-r border-slate-300 bg-green-50 text-green-800 min-w-[90px]">已歸檔</th>
+                                                            <th className="px-4 py-3 text-right border-r border-slate-300 bg-yellow-50 text-yellow-800 min-w-[90px]">送核銷</th>
+                                                            <th className="px-4 py-3 text-right bg-red-50 text-red-800 min-w-[90px]">未核銷</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-200">
+                                                        {projectStats.map((proj) => (
+                                                            <tr key={proj.id} className="hover:bg-blue-50 transition-colors">
+                                                                <td className="px-4 py-3 font-medium text-slate-800 border-r border-slate-200 flex items-center gap-2"><span className={`w-1 h-8 rounded ${proj.type === 'subsidy' ? 'bg-blue-800' : 'bg-sky-400'}`}></span>{proj.name}</td>
+                                                                <td className="px-4 py-3 text-right text-slate-600 border-r border-slate-200">{formatCurrency(proj.totalBudget)}</td>
+                                                                <td className="px-4 py-3 text-right text-slate-600 border-r border-slate-200">{formatCurrency(proj.totalUsed)}</td>
+                                                                <td className={`px-4 py-3 text-right font-bold border-r border-slate-200 ${proj.remaining < 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(proj.remaining)}</td>
+                                                                <td className="px-4 py-3 text-center border-r border-slate-200">
+                                                                    <div className="flex flex-col items-center">
+                                                                        <span>{proj.ratio}%</span>
+                                                                        {proj.isOverLimit && <span className="text-[10px] text-red-500 font-bold">超支</span>}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-center border-r border-slate-200">
+                                                                    {proj.isOverLimit ? <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 超支違規</span> : <span className="text-xs text-slate-400">-</span>}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-right text-green-700 border-r border-slate-200 bg-green-50/30">{proj.archived > 0 ? formatCurrency(proj.archived) : '-'}</td>
+                                                                <td className="px-4 py-3 text-right text-yellow-700 border-r border-slate-200 bg-yellow-50/30">{proj.submitted > 0 ? formatCurrency(proj.submitted) : '-'}</td>
+                                                                <td className="px-4 py-3 text-right text-red-700 bg-red-50/30">{proj.unsubmitted > 0 ? formatCurrency(proj.unsubmitted) : '-'}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
 
+                                {/* Entry Tab */}
                                 {activeTab === 'entry' && (
                                     <div className="max-w-[95%] mx-auto animate-fade-in">
-                                         {/* 為了節省顯示長度，請保留您原本的 Entry Tab UI 程式碼，這裡的邏輯已經包含在上方 function 內 */}
-                                         <div className="bg-white rounded-xl shadow-lg p-6">
-                                             <h3 className="font-bold text-lg mb-4">新增支出 - 請填寫表單</h3>
-                                             <form onSubmit={handleBatchSubmit}>
-                                                <div className="mb-4"><label>活動名稱:</label> <input type="text" value={batchHeader.activityName} onChange={handleHeaderChange} name="activityName" className="border p-2 rounded w-full" required/></div>
-                                                {/* 項目列表渲染 */}
-                                                {batchItems.map((item, idx) => (
-                                                    <div key={item.id} className="border p-4 mb-2 rounded bg-slate-50">
-                                                        <div className="grid grid-cols-2 gap-2 mb-2">
-                                                            <select value={item.expenseType} onChange={(e)=>handleItemChange(item.id, 'expenseType', e.target.value)} className="border p-1">{EXPENSE_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>
-                                                            <input type="number" placeholder="金額" value={item.unitPrice} onChange={(e)=>handleItemChange(item.id, 'unitPrice', e.target.value)} className="border p-1" />
+                                        <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
+                                            <div className="bg-blue-600 px-6 py-4 text-white flex justify-between items-center">
+                                                <div><h3 className="font-bold text-lg flex items-center gap-2"><PlusCircle className="h-5 w-5" /> 活動支出概況</h3><p className="text-blue-100 text-xs mt-1">目前新增至 {currentYear} 年度</p></div>
+                                                <div className="bg-blue-700 px-4 py-2 rounded-lg"><span className="text-xs text-blue-200 block">本批次總金額</span><span className="text-xl font-bold">{formatCurrency(batchTotal)}</span></div>
+                                            </div>
+                                            <form onSubmit={handleBatchSubmit} className="p-6">
+                                                <div className="space-y-4 mb-6 pb-6 border-b border-slate-100">
+                                                    <div className="flex flex-col md:flex-row gap-6">
+                                                        <div className="bg-gray-100 p-2 rounded-lg border border-gray-200 cursor-not-allowed opacity-70 w-full md:w-64">
+                                                            <label className="block text-sm font-medium text-slate-500 mb-1 flex items-center gap-1"><Calendar className="w-4 h-4 text-slate-400" /> 核銷年度 (跟隨全域)</label>
+                                                            <div className="w-full py-2 px-3 font-bold text-slate-600">{batchHeader.year}年</div>
                                                         </div>
-                                                        <button type="button" onClick={()=>removeItemRow(item.id)} className="text-red-500 text-sm">刪除</button>
+                                                        <div className="w-full md:w-32">
+                                                            <label className="block text-sm font-medium text-slate-700 mb-1">歸屬月份</label>
+                                                            <select name="month" value={batchHeader.month} onChange={handleHeaderChange} className="w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 py-2 px-3 border bg-white">
+                                                                {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                                                            </select>
+                                                        </div>
+                                                        <div className="w-full flex-1">
+                                                            <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1"><ClipboardList className="w-4 h-4 text-slate-500" /> 活動名稱</label>
+                                                            <input type="text" name="activityName" required placeholder="請輸入活動名稱" value={batchHeader.activityName} onChange={handleHeaderChange} className="w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 py-2 px-3 border bg-white" />
+                                                        </div>
                                                     </div>
-                                                ))}
-                                                <button type="button" onClick={addItemRow} className="mr-2 border p-2 rounded">新增項目</button>
-                                                <button type="submit" className="bg-blue-600 text-white p-2 rounded">儲存</button>
-                                             </form>
-                                         </div>
+                                                </div>
+
+                                                <datalist id="payee-suggestions">
+                                                    {commonPayees.map(name => <option key={name} value={name} />)}
+                                                </datalist>
+
+                                                <div className="space-y-4 mb-6">
+                                                    {batchItems.map((item, index) => (
+                                                        <div key={item.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200 flex flex-col gap-4">
+                                                            <div className="flex flex-col md:flex-row gap-4 items-start">
+                                                                <div className="hidden md:flex items-center justify-center h-10 w-8 text-slate-400 font-bold">{index + 1}</div>
+                                                                <div className="flex-1 w-full">
+                                                                    <label className="block text-xs font-medium text-slate-500 mb-1">經費來源</label>
+                                                                    <select value={item.project} onChange={(e) => handleItemChange(item.id, 'project', e.target.value)} className="w-full rounded border-slate-300 text-sm focus:border-blue-500 py-2 px-2 border bg-white">
+                                                                        {projects.map(p => {
+                                                                            const stats = projectStats.find(s=>s.id===p.id);
+                                                                            return <option key={p.id} value={p.name}>{p.name} ({p.type==='subsidy'?'補':'配'}) 餘:{formatCurrency(stats?stats.remaining:0)}</option>;
+                                                                        })}
+                                                                    </select>
+                                                                </div>
+                                                                <div className="w-full md:w-1/4">
+                                                                    <label className="block text-xs font-medium text-slate-500 mb-1">支出項目</label>
+                                                                    <select value={item.expenseType} onChange={(e) => handleItemChange(item.id, 'expenseType', e.target.value)} className="w-full rounded border-slate-300 text-sm focus:border-blue-500 py-2 px-2 border bg-white">
+                                                                        {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                                                    </select>
+                                                                </div>
+                                                                <div className="hidden md:block pt-6">
+                                                                    <button type="button" onClick={() => removeItemRow(item.id)} className="text-slate-400 hover:text-red-500"><Trash2 className="h-5 w-5" /></button>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col md:flex-row gap-4 md:pl-12">
+                                                                <div className="flex-1 w-full">
+                                                                    <label className="block text-xs font-medium text-slate-500 mb-1">補充說明</label>
+                                                                    <input type="text" placeholder="細節說明" value={item.item} onChange={(e) => handleItemChange(item.id, 'item', e.target.value)} className="w-full rounded border-slate-300 text-sm focus:border-blue-500 py-2 px-2 border" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col xl:flex-row gap-4 md:pl-12 items-end">
+                                                                <div className="flex flex-col md:flex-row gap-4 w-full xl:w-auto flex-1">
+                                                                    <div className="w-full md:w-32">
+                                                                        <label className="block text-xs font-medium text-slate-500 mb-1">對象類型</label>
+                                                                        <select value={item.payeeCategory} onChange={(e) => handleItemChange(item.id, 'payeeCategory', e.target.value)} className="w-full rounded border-slate-300 text-sm focus:border-blue-500 py-2 px-2 border bg-white">
+                                                                            {PAYEE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                                                        </select>
+                                                                    </div>
+                                                                    <div className="flex-1 w-full">
+                                                                        <label className="block text-xs font-medium text-slate-500 mb-1">人員/單位名稱</label>
+                                                                        <input type="text" placeholder="姓名" value={item.payeeName} onChange={(e) => handleItemChange(item.id, 'payeeName', e.target.value)} list={item.payeeCategory === '業師' ? "payee-suggestions" : undefined} className="w-full rounded border-slate-300 text-sm focus:border-blue-500 py-2 px-2 border" />
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-col w-full xl:w-auto">
+                                                                    <div className="flex flex-row gap-2 items-end bg-blue-50/50 p-2 rounded-lg border border-blue-100 relative">
+                                                                        <div className="w-24"><label className="block text-xs font-medium text-slate-500 mb-1">單價</label><input type="number" placeholder="0" value={item.unitPrice} onChange={(e) => handleItemChange(item.id, 'unitPrice', e.target.value)} className="w-full rounded border-slate-300 text-sm text-right py-1 px-2 border" /></div>
+                                                                        <div className="text-slate-400 pb-2">x</div>
+                                                                        <div className="w-16"><label className="block text-xs font-medium text-slate-500 mb-1">數量</label><input type="number" placeholder="1" value={item.quantity} onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)} className="w-full rounded border-slate-300 text-sm text-center py-1 px-2 border" /></div>
+                                                                        <div className="text-slate-400 pb-2">=</div>
+                                                                        <div className="w-28"><label className="block text-xs font-medium text-slate-500 mb-1">總價</label><div className="w-full rounded bg-white text-sm font-bold text-right py-1 px-2 border border-slate-200 text-blue-600">{formatCurrency(Math.round((Number(item.unitPrice) || 0) * (Number(item.quantity) || 0)))}</div></div>
+                                                                    </div>
+                                                                    {['出席費', '諮詢費'].includes(item.expenseType) && (
+                                                                        <div className="flex gap-2 mt-2 justify-end animate-fade-in">
+                                                                            <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2000)} className="text-xs font-medium bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded transition-colors border border-blue-200 shadow-sm">$2,000</button>
+                                                                            <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2500)} className="text-xs font-medium bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded transition-colors border border-blue-200 shadow-sm">$2,500</button>
+                                                                        </div>
+                                                                    )}
+                                                                    {item.expenseType === '鐘點費' && (
+                                                                        <div className="flex gap-2 mt-2 justify-end animate-fade-in">
+                                                                            <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 1000)} className="text-xs font-medium bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1 rounded transition-colors border border-purple-200 shadow-sm">$1,000</button>
+                                                                            <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2000)} className="text-xs font-medium bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1 rounded transition-colors border border-purple-200 shadow-sm">$2,000</button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="md:hidden w-full flex justify-end"><button type="button" onClick={() => removeItemRow(item.id)} className="text-red-500 text-sm flex items-center gap-1 p-2"><Trash2 className="h-4 w-4" /> 刪除</button></div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                                                    <div className="flex gap-2">
+                                                        <button type="button" onClick={addItemRow} className="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors"><Plus className="h-5 w-5" /> 新增明細</button>
+                                                        <button type="button" onClick={addPremiumRow} className="flex items-center gap-2 text-purple-600 hover:text-purple-800 font-medium px-4 py-2 rounded-lg hover:bg-purple-50 transition-colors border border-purple-200"><Coins className="h-5 w-5" /> 計算保費</button>
+                                                    </div>
+                                                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2"><Save className="h-5 w-5" /> 儲存紀錄</button>
+                                                </div>
+                                            </form>
+                                        </div>
                                     </div>
                                 )}
-                                
+
+                                {/* Log Tab */}
                                 {activeTab === 'log' && (
-                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 animate-fade-in p-6">
-                                        <h3 className="font-bold mb-4">支出明細</h3>
-                                        {groupedTransactions.map(group => (
-                                            <div key={group.key} className="border-b py-2">
-                                                <div className="flex justify-between cursor-pointer" onClick={()=>toggleGroup(group.key)}>
-                                                    <span>{group.activityName}</span>
-                                                    <span>{formatCurrency(group.totalAmount)}</span>
-                                                </div>
-                                                {expandedGroups[group.key] && (
-                                                    <div className="pl-4 mt-2 bg-slate-50 p-2">
-                                                        {group.items.map(i => <div key={i.uid} className="text-sm flex justify-between"><span>{i.item}</span><span>{formatCurrency(i.amount)}</span></div>)}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
+                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 animate-fade-in overflow-hidden">
+                                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                                            <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><FileText className="h-5 w-5 text-slate-500" /> 支出明細總表 ({currentYear}年)</h3>
+                                            <span className="text-xs font-mono text-slate-400">Total Activities: {groupedTransactions.length}</span>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
+                                                    <tr>
+                                                        <th className="px-4 py-3 w-10"></th>
+                                                        <th className="px-4 py-3">狀態</th>
+                                                        <th className="px-4 py-3">歸屬月份</th>
+                                                        <th className="px-4 py-3">活動名稱</th>
+                                                        <th className="px-4 py-3 text-right text-blue-900">補助款</th> 
+                                                        <th className="px-4 py-3 text-right text-sky-600">配合款</th> 
+                                                        <th className="px-4 py-3 text-right">總金額</th>
+                                                        <th className="px-4 py-3 w-[120px] text-right">操作</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {groupedTransactions.map((group) => (
+                                                        <React.Fragment key={group.key}>
+                                                            <tr className="hover:bg-blue-50 transition-colors cursor-pointer group border-l-4 border-l-transparent hover:border-l-blue-500" onClick={() => toggleGroup(group.key)}>
+                                                                <td className="px-4 py-4 text-slate-400">{expandedGroups[group.key] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
+                                                                <td className="px-4 py-4 text-center">
+                                                                    <div className="flex flex-col items-center gap-1">
+                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${group.status === '已歸檔' ? 'bg-green-50 text-green-700 border-green-200' : group.status === '送核銷' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{group.status}</span>
+                                                                        {group.id && <span className="text-[10px] text-slate-400 font-mono tracking-tighter">{group.id}</span>}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-4 py-4 text-slate-600 font-medium">{group.month}</td>
+                                                                <td className="px-4 py-4 font-bold text-slate-800 text-base">{group.activityName}<span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{group.items.length} 筆明細</span></td>
+                                                                <td className="px-4 py-4 text-right font-medium text-blue-900">{formatCurrency(group.subsidyAmount)}</td>
+                                                                <td className="px-4 py-4 text-right font-medium text-sky-600">{formatCurrency(group.matchingAmount)}</td>
+                                                                <td className="px-4 py-4 text-right font-bold text-slate-800">{formatCurrency(group.totalAmount)}</td>
+                                                                <td className="px-4 py-4 w-[120px] text-right">
+                                                                    <div className="flex justify-end gap-1 items-center">
+                                                                        {group.status === '未核銷' && (
+                                                                            <button onClick={(e) => handleOpenStatusModal(e, 'promote_to_submitted', group.items)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition-colors" title="送出核銷"><ArrowRightCircle className="w-4 h-4" /></button>
+                                                                        )}
+                                                                        {group.status === '送核銷' && (
+                                                                            <>
+                                                                                <button onClick={(e) => handleOpenStatusModal(e, 'promote_to_archived', group.items)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition-colors" title="完成歸檔"><CheckCircle className="w-4 h-4" /></button>
+                                                                                <button onClick={(e) => handleOpenStatusModal(e, 'rollback_to_pending', group.items)} className="p-1.5 rounded hover:bg-slate-200 text-slate-400 transition-colors" title="退回未核銷"><RotateCcw className="w-4 h-4" /></button>
+                                                                            </>
+                                                                        )}
+                                                                        {group.status === '已歸檔' && (
+                                                                            <button onClick={(e) => handleOpenStatusModal(e, 'rollback_to_submitted', group.items)} className="p-1.5 rounded hover:bg-slate-200 text-slate-300 hover:text-slate-500 transition-colors" title="退回送核銷 (修改日期/重送)"><RotateCcw className="w-4 h-4" /></button>
+                                                                        )}
+                                                                        <div className="w-[1px] h-4 bg-slate-200 mx-1"></div>
+                                                                        <button onClick={(e) => handleDeleteGroup(e, group.items)} className="text-slate-300 hover:text-red-500 p-1.5 rounded transition-colors" title="刪除整筆活動"><Trash2 className="w-4 h-4" /></button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                            {expandedGroups[group.key] && (
+                                                                <tr>
+                                                                    <td colSpan="8" className="bg-slate-50 p-4 border-b border-slate-200 shadow-inner">
+                                                                        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                                                                            <table className="w-full text-xs">
+                                                                                <thead className="bg-slate-100 text-slate-500 uppercase">
+                                                                                    <tr>
+                                                                                        <th className="px-4 py-2 text-left w-[14%]">經費來源</th>
+                                                                                        <th className="px-4 py-2 text-left w-[10%]">支出項目</th>
+                                                                                        <th className="px-4 py-2 text-left w-[33%]">補充說明</th>
+                                                                                        <th className="px-4 py-2 text-left w-[15%]">對象</th>
+                                                                                        <th className="px-4 py-2 text-right w-[10%]">單價</th>
+                                                                                        <th className="px-4 py-2 text-center w-[8%]">數量</th>
+                                                                                        <th className="px-4 py-2 text-right w-[10%]">總價</th>
+                                                                                        <th className="px-4 py-2 w-[30px]"></th>
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody className="divide-y divide-slate-100">
+                                                                                    {group.items.map((item, idx) => (
+                                                                                        <tr key={item.uid || idx} className="hover:bg-slate-50">
+                                                                                            {editingId === item.uid ? (
+                                                                                                <>
+                                                                                                    <td className="px-2 py-2"><select value={editFormData.project} onChange={(e) => handleEditFormChange('project', e.target.value)} className="w-full rounded border-slate-300 text-xs">{projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select></td>
+                                                                                                    <td className="px-2 py-2"><select value={editFormData.expenseType} onChange={(e) => handleEditFormChange('expenseType', e.target.value)} className="w-full rounded border-slate-300 text-xs">{EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></td>
+                                                                                                    <td className="px-2 py-2"><input type="text" value={editFormData.item} onChange={(e) => handleEditFormChange('item', e.target.value)} className="w-full rounded border-slate-300 text-xs" /></td>
+                                                                                                    <td className="px-2 py-2"><div className="flex flex-col gap-1"><select value={editFormData.payeeCategory} onChange={(e) => handleEditFormChange('payeeCategory', e.target.value)} className="w-full rounded border-slate-300 text-[10px]">{PAYEE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input type="text" value={editFormData.payeeName} onChange={(e) => handleEditFormChange('payeeName', e.target.value)} className="w-full rounded border-slate-300 text-xs" /></div></td>
+                                                                                                    <td className="px-2 py-2 text-right"><input type="number" value={editFormData.unitPrice} onChange={(e) => handleEditFormChange('unitPrice', e.target.value)} className="w-20 rounded border-slate-300 text-xs text-right" /></td>
+                                                                                                    <td className="px-2 py-2 text-center"><input type="number" value={editFormData.quantity} onChange={(e) => handleEditFormChange('quantity', e.target.value)} className="w-12 rounded border-slate-300 text-xs text-center" /></td>
+                                                                                                    <td className="px-4 py-2 text-right font-bold text-slate-800">{formatCurrency(Math.round((Number(editFormData.unitPrice) || 0) * (Number(editFormData.quantity) || 0)))}</td>
+                                                                                                    <td className="px-2 py-2 text-center"><div className="flex gap-1"><button onClick={handleSaveEdit} className="text-green-600 hover:bg-green-50 p-1 rounded"><Check className="w-4 h-4"/></button><button onClick={handleCancelEdit} className="text-slate-400 hover:bg-slate-100 p-1 rounded"><X className="w-4 h-4"/></button></div></td>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <td className="px-4 py-2 font-medium text-slate-700">{item.project}</td>
+                                                                                                    <td className="px-4 py-2 text-blue-600">{item.expenseType}</td>
+                                                                                                    <td className="px-4 py-2 text-slate-600">{item.item}</td>
+                                                                                                    <td className="px-4 py-2 text-slate-600"><span className="text-[10px] bg-slate-100 px-1 rounded mr-1">{item.payeeCategory}</span>{item.payeeName}</td>
+                                                                                                    <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.unitPrice)}</td>
+                                                                                                    <td className="px-4 py-2 text-center text-slate-500">{item.quantity}</td>
+                                                                                                    <td className="px-4 py-2 text-right font-bold text-slate-800">{formatCurrency(item.amount)}</td>
+                                                                                                    <td className="px-2 py-2 text-center">
+                                                                                                        {group.status === '未核銷' ? (
+                                                                                                            <button onClick={() => handleStartEdit(item)} className="text-slate-300 hover:text-blue-500 p-1 rounded transition-colors"><Pencil className="w-3 h-3" /></button>
+                                                                                                        ) : (
+                                                                                                            <span className="text-slate-200 cursor-not-allowed" title="請先退回未核銷狀態後再編輯"><Lock className="w-3 h-3" /></span>
+                                                                                                        )}
+                                                                                                    </td>
+                                                                                                </>
+                                                                                            )}
+                                                                                        </tr>
+                                                                                    ))}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </React.Fragment>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 )}
                             </>
@@ -701,8 +977,8 @@
             );
         }
 
-        // --- 啟動 React (修正為新版 createRoot 語法) ---
-        const root = createRoot(document.getElementById('root'));
+        // --- 啟動 React ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<ExpenseTrackerApp />);
     </script>
 </body>
