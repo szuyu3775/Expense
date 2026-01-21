@@ -59,7 +59,7 @@
         const BUSINESS_CATEGORIES = ['會報', '活動', '出差', '採購']; 
         const YEARS = [2024, 2025, 2026];
         const MONTHS = ['1月份','2月份','3月份','4月份','5月份','6月份','7月份','8月份','9月份','10月份','11月份','12月份'];
-        const STATUS_OPTIONS = ['未核銷', '送核銷', '已歸檔']; // 新增狀態選項
+        const STATUS_OPTIONS = ['未核銷', '送核銷', '已歸檔']; 
         const PREMIUM_RATE = 0.0211;
         const PREMIUM_ELIGIBLE_TYPES = ['出席費', '諮詢費', '鐘點費'];
 
@@ -79,7 +79,7 @@
             // 安全性與登入狀態
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [inputCode, setInputCode] = useState('');
-            const [authKey, setAuthKey] = useState(''); // 修正：需要儲存真正的金鑰
+            const [authKey, setAuthKey] = useState(''); 
             const [isVerifying, setIsVerifying] = useState(false);
 
             const [activeTab, setActiveTab] = useState('dashboard');
@@ -137,7 +137,6 @@
                 if (!API_URL) return false;
                 setIsLoading(true);
                 try {
-                    // 修正：在 URL 中帶入 authCode 參數
                     const [transRes, budgetRes] = await Promise.all([
                         fetch(`${API_URL}?type=transactions&authCode=${key}`),
                         fetch(`${API_URL}?type=budgets&authCode=${key}`)
@@ -146,7 +145,6 @@
                     const transResponse = await transRes.json();
                     const budgetResponse = await budgetRes.json();
 
-                    // 檢查後端是否回傳錯誤 (例如密碼錯誤)
                     if (transResponse.status === 'error' || budgetResponse.status === 'error') {
                         throw new Error(transResponse.message || '存取被拒絕，請檢查密碼');
                     }
@@ -178,7 +176,7 @@
                          showNotification(error.message.includes('密碼') ? '密碼錯誤，存取被拒' : '連線失敗，請檢查網路', 'error');
                     }
                     if (error.message.includes('密碼') || error.message.includes('拒絕')) {
-                        handleLogout(); // 密碼錯就登出
+                        handleLogout();
                     }
                     return false;
                 } finally {
@@ -188,7 +186,6 @@
 
             const postToGAS = async (action, data) => {
                 try {
-                    // 修正：POST 請求也要帶上 authCode
                     const response = await fetch(API_URL, {
                         method: 'POST',
                         body: JSON.stringify({ action, data, authCode: authKey }),
@@ -213,13 +210,10 @@
                     return;
                 }
                 setIsVerifying(true);
-                
-                // 嘗試用輸入的密碼去跟 Google 拿資料
                 const success = await fetchAllData(inputCode);
-                
                 if (success) {
                     setIsAuthenticated(true);
-                    setAuthKey(inputCode); // 記住這把正確的鑰匙
+                    setAuthKey(inputCode); 
                     localStorage.setItem('expense_app_key', inputCode);
                     showNotification('登入成功', 'success');
                 } else {
@@ -238,7 +232,6 @@
             };
 
             // --- Effect Hooks ---
-            // 自動登入檢查 (如果有存過密碼，嘗試自動連線)
             useEffect(() => {
                 const savedKey = localStorage.getItem('expense_app_key');
                 if (savedKey) {
@@ -372,7 +365,7 @@
                     });
                 });
                 return result;
-            }, [currentYearTransactions, projects, filterCategory, filterStatus, filterMonth]); // 更新依賴
+            }, [currentYearTransactions, projects, filterCategory, filterStatus, filterMonth]); 
 
             // --- Handler ---
 
@@ -569,7 +562,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.2.1 | 更新時間：2026/01/21 12:34</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.2.1 | 更新時間：2026/01/21 13:02</p>
                             </div>
                         </div>
                     </div>
@@ -578,6 +571,7 @@
 
             return (
                 <div className="min-h-screen bg-slate-50 text-slate-800 font-sans relative">
+                    {/* 遮罩 */}
                     {(isLoading || isSaving) && (
                         <div className="fixed inset-0 bg-white/60 z-50 flex items-center justify-center backdrop-blur-sm">
                             <div className="flex flex-col items-center p-6 bg-white rounded-xl shadow-xl border border-slate-100">
@@ -842,7 +836,16 @@
                                                                     <select value={item.project} onChange={(e) => handleItemChange(item.id, 'project', e.target.value)} className="w-full rounded border-slate-300 text-sm focus:border-blue-500 py-2 px-2 border bg-white">
                                                                         {projects.map(p => {
                                                                             const stats = projectStats.find(s=>s.id===p.id);
-                                                                            return <option key={p.id} value={p.name}>{p.name} ({p.type==='subsidy'?'補':'配'}) 餘:{formatCurrency(stats?stats.remaining:0)}</option>;
+                                                                            const isSubsidy = p.type === 'subsidy';
+                                                                            return (
+                                                                                <option 
+                                                                                    key={p.id} 
+                                                                                    value={p.name}
+                                                                                    className={isSubsidy ? "text-blue-900 bg-blue-100 font-bold" : "text-sky-700 bg-sky-100 font-bold"}
+                                                                                >
+                                                                                    {p.name} ({isSubsidy ? '補' : '配'}) 餘:{formatCurrency(stats?stats.remaining:0)}
+                                                                                </option>
+                                                                            );
                                                                         })}
                                                                     </select>
                                                                 </div>
