@@ -32,7 +32,7 @@
         }
     </script>
 </head>
-<body class="bg-slate-50 text-slate-800">
+<body class="bg-slate-50 text-slate-800 text-base">
     <!-- 這是 React 程式顯示的「掛載點」 -->
     <div id="root"></div>
 
@@ -49,6 +49,7 @@
         } from 'https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0';
 
         // --- 設定區 ---
+        // 您的 GAS 後端網址 (已確認為最新版)
         const API_URL = 'https://script.google.com/macros/s/AKfycbwCT-oLJM6dILv0Lt5J8mH4PhuQ8dyEBvM0VlUpQQqKZek2y4A5arax52eoFsIIQ9gg/exec'; 
 
         // --- 常數定義 ---
@@ -62,10 +63,8 @@
         const PREMIUM_RATE = 0.0211;
         const PREMIUM_ELIGIBLE_TYPES = ['出席費', '諮詢費', '鐘點費'];
 
-        // --- 樣式設定 (統一管理) ---
-        // 標題樣式：粗體 + 深色
+        // --- 樣式設定 ---
         const labelStyle = "block text-sm font-bold text-slate-700 mb-1";
-        // 輸入框樣式：明顯淺藍色邊框 + 圓角
         const inputStyle = "w-full rounded-lg border-2 border-blue-200 text-base py-2 px-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors bg-white";
 
         // --- 輔助函式：取得標籤樣式 ---
@@ -91,6 +90,7 @@
 
         // --- 主應用程式元件 ---
         function ExpenseTrackerApp() {
+            // 安全性與登入狀態
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [inputCode, setInputCode] = useState('');
             const [authKey, setAuthKey] = useState(''); 
@@ -99,24 +99,29 @@
             const [activeTab, setActiveTab] = useState('dashboard');
             const [notification, setNotification] = useState(null);
             
+            // 資料狀態
             const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
             const [transactions, setTransactions] = useState([]); 
             const [yearlyBudgets, setYearlyBudgets] = useState([]); 
             
+            // 查詢與篩選狀態
             const [searchQuery, setSearchQuery] = useState('');
             const [searchResult, setSearchResult] = useState(null);
             const [filterCategory, setFilterCategory] = useState('全部');
             const [filterStatus, setFilterStatus] = useState('全部');
             const [filterMonth, setFilterMonth] = useState('全部');
 
+            // UI 狀態
             const [isLoading, setIsLoading] = useState(false);
             const [isSaving, setIsSaving] = useState(false);
             const [savingMessage, setSavingMessage] = useState('處理中...');
             const [dataLoaded, setDataLoaded] = useState(false);
 
+            // 編輯與新增狀態
             const [editingId, setEditingId] = useState(null);
             const [editFormData, setEditFormData] = useState({});
             
+            // 專案設定 (固定)
             const [projects] = useState([
                 { id: 1, name: '職涯-課程(補)', type: 'subsidy', description: '教育部補助' },
                 { id: 2, name: '職涯-課程(配)', type: 'matching', description: '學校配合款' },
@@ -183,7 +188,7 @@
                          showNotification(error.message.includes('密碼') ? '密碼錯誤，存取被拒' : '連線失敗，請檢查網路', 'error');
                     }
                     if (error.message.includes('密碼') || error.message.includes('拒絕')) {
-                        handleLogout(); 
+                        handleLogout();
                     }
                     return false;
                 } finally {
@@ -267,6 +272,7 @@
                 return transactions.filter(t => t.year === currentYear);
             }, [transactions, currentYear]);
 
+            // 查詢邏輯
             useEffect(() => {
                 if (activeTab === 'query' && searchQuery) {
                     const results = currentYearTransactions.filter(t => t.payeeName === searchQuery.trim());
@@ -319,6 +325,7 @@
             const groupedTransactions = useMemo(() => {
                 const groups = {};
                 
+                // 多重篩選邏輯
                 const filteredTransactions = currentYearTransactions.filter(t => {
                     const matchCategory = filterCategory === '全部' || t.businessCategory === filterCategory;
                     const matchStatus = filterStatus === '全部' || t.status === filterStatus;
@@ -570,7 +577,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.3.0 | 更新時間：2026/01/21 14:00</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.3.2 | 更新時間：2026/01/21 14:32</p>
                             </div>
                         </div>
                     </div>
@@ -848,6 +855,28 @@
                                                             <select value={item.expenseType} onChange={(e) => handleItemChange(item.id, 'expenseType', e.target.value)} className={inputStyle}>
                                                                 {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                                             </select>
+                                                            
+                                                            {/* 快捷按鈕區 (Moved Here) */}
+                                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                                {['出席費', '諮詢費'].includes(item.expenseType) && (
+                                                                    <>
+                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2000)} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors border border-blue-300 font-medium">$2000</button>
+                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2500)} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors border border-blue-300 font-medium">$2500</button>
+                                                                    </>
+                                                                )}
+                                                                {item.expenseType === '鐘點費' && (
+                                                                    <>
+                                                                         <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 1000)} className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors border border-purple-300 font-medium">$1000</button>
+                                                                         <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2000)} className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors border border-purple-300 font-medium">$2000</button>
+                                                                    </>
+                                                                )}
+                                                                {item.expenseType === '餐點費' && (
+                                                                    <>
+                                                                         <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 40)} className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors border border-orange-300 font-medium">$40</button>
+                                                                         <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 120)} className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors border border-orange-300 font-medium">$120</button>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                         
                                                         {/* Row 2 */}
@@ -874,12 +903,6 @@
                                                             <div className="w-full md:w-28 flex-none relative">
                                                                 <label className={labelStyle}>單價</label>
                                                                 <input type="number" placeholder="0" value={item.unitPrice} onChange={(e) => handleItemChange(item.id, 'unitPrice', e.target.value)} className={inputStyle + " text-right font-mono"} />
-                                                                {item.expenseType === '餐點費' && (
-                                                                    <div className="absolute top-0 right-0 flex gap-1 -mt-6">
-                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 40)} className="text-[10px] px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full hover:bg-orange-200 transition-colors border border-orange-300 shadow-sm">$40</button>
-                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 120)} className="text-[10px] px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full hover:bg-orange-200 transition-colors border border-orange-300 shadow-sm">$120</button>
-                                                                    </div>
-                                                                )}
                                                             </div>
 
                                                             <div className="text-slate-400 font-bold pb-3">×</div>
@@ -1094,7 +1117,7 @@
                                                         <input 
                                                             type="text" 
                                                             placeholder="請輸入姓名或單位名稱 (精確搜尋)..." 
-                                                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border-2 border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                                             value={searchQuery}
                                                             onChange={(e) => setSearchQuery(e.target.value)}
                                                         />
