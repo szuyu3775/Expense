@@ -45,10 +45,11 @@
             PlusCircle, Wallet, FileText, AlertCircle, Save, X, Table, Trash2, Plus, 
             CheckCircle2, Calendar, Hash, ClipboardList, Coins, Archive, ChevronDown, 
             ChevronRight, Settings, Shuffle, Pencil, Check, Loader2, ArrowRightCircle, 
-            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Tag
+            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Tag, Filter, ListFilter
         } from 'https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0';
 
         // --- 設定區 ---
+        // 您的 GAS 後端網址 (已確認為最新版)
         const API_URL = 'https://script.google.com/macros/s/AKfycbwCT-oLJM6dILv0Lt5J8mH4PhuQ8dyEBvM0VlUpQQqKZek2y4A5arax52eoFsIIQ9gg/exec'; 
 
         // --- 常數定義 ---
@@ -58,15 +59,27 @@
         const BUSINESS_CATEGORIES = ['會報', '活動', '出差', '採購']; 
         const YEARS = [2024, 2025, 2026];
         const MONTHS = ['1月份','2月份','3月份','4月份','5月份','6月份','7月份','8月份','9月份','10月份','11月份','12月份'];
+        const STATUS_OPTIONS = ['未核銷', '送核銷', '已歸檔']; // 新增狀態選項
         const PREMIUM_RATE = 0.0211;
         const PREMIUM_ELIGIBLE_TYPES = ['出席費', '諮詢費', '鐘點費'];
+
+        // --- 輔助函式：取得標籤樣式 ---
+        const getCategoryStyle = (category) => {
+            switch (category) {
+                case '出差': return 'bg-green-50 text-green-700 border border-green-200';
+                case '會報': return 'bg-red-50 text-red-700 border border-red-200';
+                case '活動': return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
+                case '採購': return 'bg-purple-50 text-purple-700 border border-purple-200';
+                default: return 'bg-gray-50 text-gray-600 border border-gray-200';
+            }
+        };
 
         // --- 主應用程式元件 ---
         function ExpenseTrackerApp() {
             // 安全性與登入狀態
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [inputCode, setInputCode] = useState('');
-            const [authKey, setAuthKey] = useState('');
+            const [authKey, setAuthKey] = useState(''); // 修正：需要儲存真正的金鑰
             const [isVerifying, setIsVerifying] = useState(false);
 
             const [activeTab, setActiveTab] = useState('dashboard');
@@ -77,9 +90,14 @@
             const [transactions, setTransactions] = useState([]); 
             const [yearlyBudgets, setYearlyBudgets] = useState([]); 
             
-            // 查詢功能狀態
+            // 查詢與篩選狀態
             const [searchQuery, setSearchQuery] = useState('');
             const [searchResult, setSearchResult] = useState(null);
+            
+            // 多重篩選狀態
+            const [filterCategory, setFilterCategory] = useState('全部');
+            const [filterStatus, setFilterStatus] = useState('全部');
+            const [filterMonth, setFilterMonth] = useState('全部');
 
             // UI 狀態
             const [isLoading, setIsLoading] = useState(false);
@@ -119,6 +137,7 @@
                 if (!API_URL) return false;
                 setIsLoading(true);
                 try {
+                    // 修正：在 URL 中帶入 authCode 參數
                     const [transRes, budgetRes] = await Promise.all([
                         fetch(`${API_URL}?type=transactions&authCode=${key}`),
                         fetch(`${API_URL}?type=budgets&authCode=${key}`)
@@ -127,6 +146,7 @@
                     const transResponse = await transRes.json();
                     const budgetResponse = await budgetRes.json();
 
+                    // 檢查後端是否回傳錯誤 (例如密碼錯誤)
                     if (transResponse.status === 'error' || budgetResponse.status === 'error') {
                         throw new Error(transResponse.message || '存取被拒絕，請檢查密碼');
                     }
@@ -158,7 +178,7 @@
                          showNotification(error.message.includes('密碼') ? '密碼錯誤，存取被拒' : '連線失敗，請檢查網路', 'error');
                     }
                     if (error.message.includes('密碼') || error.message.includes('拒絕')) {
-                        handleLogout(); 
+                        handleLogout(); // 密碼錯就登出
                     }
                     return false;
                 } finally {
@@ -168,6 +188,7 @@
 
             const postToGAS = async (action, data) => {
                 try {
+                    // 修正：POST 請求也要帶上 authCode
                     const response = await fetch(API_URL, {
                         method: 'POST',
                         body: JSON.stringify({ action, data, authCode: authKey }),
@@ -184,6 +205,7 @@
                 }
             };
 
+            // --- 登入/登出 ---
             const handleLogin = async (e) => {
                 e.preventDefault();
                 if (!inputCode) {
@@ -191,10 +213,13 @@
                     return;
                 }
                 setIsVerifying(true);
+                
+                // 嘗試用輸入的密碼去跟 Google 拿資料
                 const success = await fetchAllData(inputCode);
+                
                 if (success) {
                     setIsAuthenticated(true);
-                    setAuthKey(inputCode); 
+                    setAuthKey(inputCode); // 記住這把正確的鑰匙
                     localStorage.setItem('expense_app_key', inputCode);
                     showNotification('登入成功', 'success');
                 } else {
@@ -212,6 +237,8 @@
                 localStorage.removeItem('expense_app_key');
             };
 
+            // --- Effect Hooks ---
+            // 自動登入檢查 (如果有存過密碼，嘗試自動連線)
             useEffect(() => {
                 const savedKey = localStorage.getItem('expense_app_key');
                 if (savedKey) {
@@ -242,6 +269,7 @@
                 return transactions.filter(t => t.year === currentYear);
             }, [transactions, currentYear]);
 
+            // 查詢邏輯
             useEffect(() => {
                 if (activeTab === 'query' && searchQuery) {
                     const results = currentYearTransactions.filter(t => t.payeeName === searchQuery.trim());
@@ -293,7 +321,17 @@
 
             const groupedTransactions = useMemo(() => {
                 const groups = {};
-                currentYearTransactions.forEach(t => {
+                
+                // 多重篩選邏輯
+                const filteredTransactions = currentYearTransactions.filter(t => {
+                    const matchCategory = filterCategory === '全部' || t.businessCategory === filterCategory;
+                    const matchStatus = filterStatus === '全部' || t.status === filterStatus;
+                    const matchMonth = filterMonth === '全部' || t.month === filterMonth;
+                    return matchCategory && matchStatus && matchMonth;
+                });
+
+                filteredTransactions.forEach(t => {
+                    // Group key 增加 businessCategory
                     const groupKey = `${t.month}-${t.id || 'pending'}-${t.activityName}-${t.businessCategory}`;
                     if (!groups[groupKey]) {
                         groups[groupKey] = {
@@ -334,7 +372,9 @@
                     });
                 });
                 return result;
-            }, [currentYearTransactions, projects]);
+            }, [currentYearTransactions, projects, filterCategory, filterStatus, filterMonth]); // 更新依賴
+
+            // --- Handler ---
 
             const handleBudgetUpdate = async (projectId, amount) => {
                 const numAmount = Number(amount);
@@ -391,22 +431,7 @@
                 if (!batchItems.every(i => i.unitPrice && i.quantity && i.project)) { showNotification('欄位不完整', 'error'); return; }
 
                 const newTrans = batchItems.map((item, idx) => ({
-                    uid: `new_${Date.now()}_${idx}`,
-                    id: '', 
-                    year: Number(batchHeader.year), 
-                    month: batchHeader.month,
-                    activityName: batchHeader.activityName, 
-                    businessCategory: batchHeader.businessCategory, 
-                    project: item.project, 
-                    expenseType: item.expenseType, 
-                    item: item.item,
-                    payeeCategory: item.payeeCategory, 
-                    payeeName: item.payeeName, 
-                    unitPrice: Number(item.unitPrice), 
-                    quantity: Number(item.quantity),
-                    amount: Math.round(Number(item.unitPrice)*Number(item.quantity)), 
-                    status: '未核銷', 
-                    archiveDate: ''
+                    uid: `new_${Date.now()}_${idx}`, id: '', year: Number(batchHeader.year), month: batchHeader.month, activityName: batchHeader.activityName, businessCategory: batchHeader.businessCategory, project: item.project, expenseType: item.expenseType, item: item.item, payeeCategory: item.payeeCategory, payeeName: item.payeeName, unitPrice: Number(item.unitPrice), quantity: Number(item.quantity), amount: Math.round(Number(item.unitPrice)*Number(item.quantity)), status: '未核銷', archiveDate: ''
                 }));
 
                 setIsSaving(true);
@@ -520,8 +545,8 @@
                         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm animate-fade-in-down border border-slate-200">
                             <div className="flex flex-col items-center mb-6">
                                 <div className="bg-blue-600 p-3 rounded-xl mb-3 shadow-lg shadow-blue-200"><Wallet className="h-8 w-8 text-white" /></div>
-                                <h2 className="text-xl font-bold text-slate-800">致理資教職輔計畫</h2>
-                                <p className="text-sm text-slate-500">經費控管系統</p>
+                                <h2 className="text-xl font-bold text-slate-800">致理資教職輔計畫經費控管系統</h2>
+                                <p className="text-sm text-slate-500">經費控管系統 (Secure)</p>
                             </div>
                             <form onSubmit={handleLogin} className="space-y-4">
                                 <div>
@@ -544,7 +569,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.1.8 | 更新時間：2026/01/21 12:00</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.2.1 | 更新時間：2026/01/21 12:34</p>
                             </div>
                         </div>
                     </div>
@@ -735,6 +760,7 @@
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px]">支出總計</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px] font-bold">剩餘金額</th>
                                                             <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">執行率</th>
+                                                            <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">流用狀態</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 bg-green-50 text-green-800 min-w-[90px]">已歸檔</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 bg-yellow-50 text-yellow-800 min-w-[90px]">送核銷</th>
                                                             <th className="px-4 py-3 text-right bg-red-50 text-red-800 min-w-[90px]">未核銷</th>
@@ -752,6 +778,9 @@
                                                                         <span>{proj.ratio}%</span>
                                                                         {proj.isOverLimit && <span className="text-[10px] text-red-500">(超支)</span>}
                                                                     </div>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-center border-r border-slate-200">
+                                                                    {proj.isOverLimit ? <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 超支違規</span> : proj.isFlowing ? <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 流用中</span> : <span className="text-xs text-slate-400">-</span>}
                                                                 </td>
                                                                 <td className="px-4 py-3 text-right text-green-700 border-r border-slate-200 bg-green-50/30">{proj.archived > 0 ? formatCurrency(proj.archived) : '-'}</td>
                                                                 <td className="px-4 py-3 text-right text-yellow-700 border-r border-slate-200 bg-yellow-50/30">{proj.submitted > 0 ? formatCurrency(proj.submitted) : '-'}</td>
@@ -888,8 +917,39 @@
                                 {activeTab === 'log' && (
                                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 animate-fade-in overflow-hidden">
                                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                                            <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><FileText className="h-5 w-5 text-slate-500" /> 明細紀錄 ({currentYear}年)</h3>
-                                            <span className="text-xs font-mono text-slate-400">Total Activities: {groupedTransactions.length}</span>
+                                            <div className="flex flex-col gap-2 w-full">
+                                                <div className="flex justify-between items-center">
+                                                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><FileText className="h-5 w-5 text-slate-500" /> 明細紀錄 ({currentYear}年)</h3>
+                                                    <span className="text-xs font-mono text-slate-400">Total Activities: {groupedTransactions.length}</span>
+                                                </div>
+                                                
+                                                {/* 篩選工具列 */}
+                                                <div className="flex flex-wrap gap-2 items-center text-sm">
+                                                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg px-2 py-1 border border-slate-200">
+                                                        <Filter className="w-3 h-3 text-slate-400" />
+                                                        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-transparent font-medium text-slate-600 focus:outline-none border-none cursor-pointer">
+                                                            <option value="全部">全部類別</option>
+                                                            {BUSINESS_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg px-2 py-1 border border-slate-200">
+                                                        <ListFilter className="w-3 h-3 text-slate-400" />
+                                                        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-transparent font-medium text-slate-600 focus:outline-none border-none cursor-pointer">
+                                                            <option value="全部">全部狀態</option>
+                                                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                                                        </select>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg px-2 py-1 border border-slate-200">
+                                                        <Calendar className="w-3 h-3 text-slate-400" />
+                                                        <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className="bg-transparent font-medium text-slate-600 focus:outline-none border-none cursor-pointer">
+                                                            <option value="全部">全部月份</option>
+                                                            {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-sm text-left">
@@ -918,7 +978,11 @@
                                                                 </td>
                                                                 <td className="px-4 py-4 text-slate-600 font-medium whitespace-nowrap w-[1%]">{group.month}</td>
                                                                 <td className="px-4 py-4 font-bold text-slate-800 text-base break-words min-w-[200px]">
-                                                                    {group.businessCategory && <span className="mr-2 text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600">[{group.businessCategory}]</span>}
+                                                                    {group.businessCategory && (
+                                                                        <span className={`mr-2 text-[10px] px-1.5 py-0.5 rounded border ${getCategoryStyle(group.businessCategory)}`}>
+                                                                            [{group.businessCategory}]
+                                                                        </span>
+                                                                    )}
                                                                     {group.activityName}
                                                                     <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">{group.items.length} 筆明細</span>
                                                                 </td>
