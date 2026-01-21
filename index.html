@@ -413,7 +413,24 @@
                 }));
             };
 
-            const addItemRow = () => setBatchItems(prev => [...prev, { id: Date.now(), project: projects[0].name, expenseType: '諮詢費', item: '', payeeCategory: '業師', payeeName: '', unitPrice: '', quantity: 1 }]);
+            // ★★★ 優化：新增明細時，自動帶入上一筆的設定 ★★★
+            const addItemRow = () => {
+                setBatchItems(prev => {
+                    // 取得上一筆資料 (如果有)
+                    const lastItem = prev[prev.length - 1];
+                    return [...prev, { 
+                        id: Date.now(), 
+                        // 如果有上一筆，就用上一筆的設定；否則用預設值
+                        project: lastItem ? lastItem.project : projects[0].name, 
+                        expenseType: lastItem ? lastItem.expenseType : '諮詢費', 
+                        item: '', 
+                        payeeCategory: '業師', 
+                        payeeName: '', 
+                        unitPrice: '', 
+                        quantity: 1 
+                    }];
+                });
+            };
             
             const removeItemRow = (id) => {
                 if (batchItems.length === 1) { showNotification('至少一筆', 'error'); return; }
@@ -429,10 +446,7 @@
 
             const handleBatchSubmit = async (e) => {
                 e.preventDefault();
-                // 檢查表頭
                 if (!batchHeader.activityName.trim()) { showNotification('需填活動名稱', 'error'); return; }
-                
-                // 檢查明細是否完整 (加入 payeeName 檢查)
                 if (!batchItems.every(i => i.unitPrice && i.quantity && i.project && i.payeeName && i.payeeName.trim())) { 
                     showNotification('欄位不完整 (請檢查金額、經費來源及人員/單位名稱)', 'error'); 
                     return; 
@@ -554,7 +568,7 @@
                             <div className="flex flex-col items-center mb-6">
                                 <div className="bg-blue-600 p-3 rounded-xl mb-3 shadow-lg shadow-blue-200"><Wallet className="h-8 w-8 text-white" /></div>
                                 <h2 className="text-xl font-bold text-slate-800">致理資教職輔計畫經費控管系統</h2>
-                                <p className="text-sm text-slate-500">經費控管系統 (Secure)</p>
+                                <p className="text-sm text-slate-500">經費控管系統</p>
                             </div>
                             <form onSubmit={handleLogin} className="space-y-4">
                                 <div>
@@ -577,7 +591,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.3.2 | 更新時間：2026/01/21 14:32</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.3.2 | 更新時間：2026/01/21 14:55</p>
                             </div>
                         </div>
                     </div>
@@ -828,9 +842,14 @@
 
                                         <div className="space-y-4">
                                             {batchItems.map((item, index) => (
-                                                <div key={item.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 relative hover:shadow-md transition-shadow group">
+                                                <div key={item.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 relative hover:shadow-md transition-shadow group animate-fade-in-down">
                                                     <button type="button" onClick={() => removeItemRow(item.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50"><Trash2 className="h-5 w-5" /></button>
                                                     
+                                                    {/* Visual Cue for new item */}
+                                                    {index === batchItems.length - 1 && batchItems.length > 1 && (
+                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400 rounded-l-xl"></div>
+                                                    )}
+
                                                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                                                         {/* Row 1 */}
                                                         <div className="md:col-span-6">
