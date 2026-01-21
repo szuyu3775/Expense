@@ -45,7 +45,7 @@
             PlusCircle, Wallet, FileText, AlertCircle, Save, X, Table, Trash2, Plus, 
             CheckCircle2, Calendar, Hash, ClipboardList, Coins, Archive, ChevronDown, 
             ChevronRight, Settings, Shuffle, Pencil, Check, Loader2, ArrowRightCircle, 
-            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User
+            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Tag
         } from 'https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0';
 
         // --- 設定區 ---
@@ -56,6 +56,7 @@
         const EXPENSE_TYPES = ['鐘點費', '諮詢費', '出席費', '補充保費', '餐點費', '材料費', '交通費', '保險費', '雜支', '差旅費', '教材費'];
         const EXPENSE_SORT_ORDER = { '鐘點費': 1, '諮詢費': 2, '出席費': 3, '補充保費': 4, '餐點費': 5, '材料費': 6, '交通費': 7, '保險費': 8, '雜支': 9, '差旅費': 10 };
         const PAYEE_CATEGORIES = ['業師', '個人', '廠商', '勞健保'];
+        const BUSINESS_CATEGORIES = ['會報', '活動', '出差', '採購']; // 新增業務類別
         const YEARS = [2024, 2025, 2026];
         const MONTHS = ['1月份','2月份','3月份','4月份','5月份','6月份','7月份','8月份','9月份','10月份','11月份','12月份'];
         const PREMIUM_RATE = 0.0211;
@@ -101,17 +102,25 @@
                 { id: 6, name: '職涯-雜支(配)', type: 'matching', description: '學校配合款' },
             ]);
 
-            const [batchHeader, setBatchHeader] = useState({ id: '', year: currentYear, month: '1月份', status: '未核銷', activityName: '', archiveDate: '' });
+            // 預設業務類別為 '會報'
+            const [batchHeader, setBatchHeader] = useState({ 
+                id: '', 
+                year: currentYear, 
+                month: '1月份', 
+                status: '未核銷', 
+                activityName: '', 
+                archiveDate: '',
+                businessCategory: '會報' 
+            });
             const [batchItems, setBatchItems] = useState([{ id: Date.now(), project: projects[0].name, expenseType: '諮詢費', item: '', payeeCategory: '業師', payeeName: '', unitPrice: '', quantity: 1 }]);
             const [expandedGroups, setExpandedGroups] = useState({});
             const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', items: [], inputValue: '' });
 
-            // --- API 連線邏輯 (修正版：加入 authCode) ---
+            // --- API 連線邏輯 ---
             const fetchAllData = useCallback(async (key) => {
                 if (!API_URL) return false;
                 setIsLoading(true);
                 try {
-                    // 修正：在 URL 中帶入 authCode 參數
                     const [transRes, budgetRes] = await Promise.all([
                         fetch(`${API_URL}?type=transactions&authCode=${key}`),
                         fetch(`${API_URL}?type=budgets&authCode=${key}`)
@@ -120,7 +129,6 @@
                     const transResponse = await transRes.json();
                     const budgetResponse = await budgetRes.json();
 
-                    // 檢查後端是否回傳錯誤 (例如密碼錯誤)
                     if (transResponse.status === 'error' || budgetResponse.status === 'error') {
                         throw new Error(transResponse.message || '存取被拒絕，請檢查密碼');
                     }
@@ -152,7 +160,7 @@
                          showNotification(error.message.includes('密碼') ? '密碼錯誤，存取被拒' : '連線失敗，請檢查網路', 'error');
                     }
                     if (error.message.includes('密碼') || error.message.includes('拒絕')) {
-                        handleLogout(); // 密碼錯就登出
+                        handleLogout(); 
                     }
                     return false;
                 } finally {
@@ -162,7 +170,6 @@
 
             const postToGAS = async (action, data) => {
                 try {
-                    // 修正：POST 請求也要帶上 authCode
                     const response = await fetch(API_URL, {
                         method: 'POST',
                         body: JSON.stringify({ action, data, authCode: authKey }),
@@ -187,13 +194,10 @@
                     return;
                 }
                 setIsVerifying(true);
-                
-                // 嘗試用輸入的密碼去跟 Google 拿資料
                 const success = await fetchAllData(inputCode);
-                
                 if (success) {
                     setIsAuthenticated(true);
-                    setAuthKey(inputCode); // 記住這把正確的鑰匙
+                    setAuthKey(inputCode); 
                     localStorage.setItem('expense_app_key', inputCode);
                     showNotification('登入成功', 'success');
                 } else {
@@ -212,7 +216,6 @@
             };
 
             // --- Effect Hooks ---
-            // 自動登入檢查 (如果有存過密碼，嘗試自動連線)
             useEffect(() => {
                 const savedKey = localStorage.getItem('expense_app_key');
                 if (savedKey) {
@@ -267,12 +270,13 @@
                     const submitted = projTrans.filter(t => t.status === '送核銷').reduce((sum, t) => sum + t.amount, 0);
                     const unsubmitted = projTrans.filter(t => t.status === '未核銷').reduce((sum, t) => sum + t.amount, 0);
                     const totalUsed = archived + submitted + unsubmitted;
-                    const ratio = yearBudget > 0 ? (totalUsed / yearBudget) * 100 : 0;
+                    
+                    const ratio = yearBudget > 0 ? ((totalUsed / yearBudget) * 100) : 0;
 
                     return {
                         ...proj, totalBudget: yearBudget, archived, submitted, unsubmitted, totalUsed,
-                        remaining: yearBudget - totalUsed, ratio: ratio.toFixed(2),
-                        isFlowing: totalUsed > yearBudget && totalUsed <= yearBudget * 1.2,
+                        remaining: yearBudget - totalUsed, 
+                        ratio: ratio.toFixed(2), 
                         isOverLimit: totalUsed > yearBudget * 1.2
                     };
                 });
@@ -295,10 +299,17 @@
             const groupedTransactions = useMemo(() => {
                 const groups = {};
                 currentYearTransactions.forEach(t => {
-                    const groupKey = `${t.month}-${t.id || 'pending'}-${t.activityName}`;
+                    // Group key 增加 businessCategory
+                    const groupKey = `${t.month}-${t.id || 'pending'}-${t.activityName}-${t.businessCategory}`;
                     if (!groups[groupKey]) {
                         groups[groupKey] = {
-                            key: groupKey, id: t.id, month: t.month, activityName: t.activityName, status: t.status, archiveDate: t.archiveDate,
+                            key: groupKey, 
+                            id: t.id, 
+                            month: t.month, 
+                            activityName: t.activityName, 
+                            businessCategory: t.businessCategory || '', 
+                            status: t.status, 
+                            archiveDate: t.archiveDate,
                             items: [], totalAmount: 0, subsidyAmount: 0, matchingAmount: 0
                         };
                     }
@@ -388,7 +399,22 @@
                 if (!batchItems.every(i => i.unitPrice && i.quantity && i.project)) { showNotification('欄位不完整', 'error'); return; }
 
                 const newTrans = batchItems.map((item, idx) => ({
-                    uid: `new_${Date.now()}_${idx}`, id: '', year: Number(batchHeader.year), month: batchHeader.month, activityName: batchHeader.activityName, project: item.project, expenseType: item.expenseType, item: item.item, payeeCategory: item.payeeCategory, payeeName: item.payeeName, unitPrice: Number(item.unitPrice), quantity: Number(item.quantity), amount: Math.round(Number(item.unitPrice)*Number(item.quantity)), status: '未核銷', archiveDate: ''
+                    uid: `new_${Date.now()}_${idx}`,
+                    id: '', 
+                    year: Number(batchHeader.year), 
+                    month: batchHeader.month,
+                    activityName: batchHeader.activityName, 
+                    businessCategory: batchHeader.businessCategory, // 傳送業務類別
+                    project: item.project, 
+                    expenseType: item.expenseType, 
+                    item: item.item,
+                    payeeCategory: item.payeeCategory, 
+                    payeeName: item.payeeName, 
+                    unitPrice: Number(item.unitPrice), 
+                    quantity: Number(item.quantity),
+                    amount: Math.round(Number(item.unitPrice)*Number(item.quantity)), 
+                    status: '未核銷', 
+                    archiveDate: ''
                 }));
 
                 setIsSaving(true);
@@ -397,6 +423,7 @@
                 if (success) {
                     await fetchAllData(authKey); 
                     showNotification('新增成功', 'success');
+                    // 重置時保留部分設定
                     setBatchHeader(prev => ({...prev, id: '', activityName: '', archiveDate: ''}));
                     setBatchItems([{ id: Date.now(), project: projects[0].name, expenseType: '諮詢費', item: '', payeeCategory: '業師', payeeName: '', unitPrice: '', quantity: 1 }]);
                 } else {
@@ -527,7 +554,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.1.6 | 更新時間：2026/01/21 09:50</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.3.0 | 更新時間：2026/01/21 11:45</p>
                             </div>
                         </div>
                     </div>
@@ -672,7 +699,7 @@
                                                             </div>
                                                             <div className="flex items-center gap-2">
                                                                 <span className="text-slate-400">$</span>
-                                                                <input type="text" defaultValue={budget ? budget.toLocaleString() : ''} onBlur={(e) => { const rawValue = e.target.value.replace(/,/g, ''); if (!isNaN(rawValue) && rawValue !== '') { handleBudgetUpdate(proj.id, rawValue); e.target.value = Number(rawValue).toLocaleString(); } }} onFocus={(e) => e.target.select()} className="w-32 text-right font-bold text-slate-800 rounded border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+                                                                <input type="text" key={`${currentYear}-${proj.id}`} defaultValue={budget ? budget.toLocaleString() : ''} onBlur={(e) => { const rawValue = e.target.value.replace(/,/g, ''); if (!isNaN(rawValue) && rawValue !== '') { handleBudgetUpdate(proj.id, rawValue); e.target.value = Number(rawValue).toLocaleString(); } }} onFocus={(e) => e.target.select()} className="w-32 text-right font-bold text-slate-800 rounded border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
                                                             </div>
                                                         </div>
                                                     );
@@ -722,7 +749,6 @@
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px]">支出總計</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px] font-bold">剩餘金額</th>
                                                             <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">執行率</th>
-                                                            <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">流用狀態</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 bg-green-50 text-green-800 min-w-[90px]">已歸檔</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 bg-yellow-50 text-yellow-800 min-w-[90px]">送核銷</th>
                                                             <th className="px-4 py-3 text-right bg-red-50 text-red-800 min-w-[90px]">未核銷</th>
@@ -736,14 +762,10 @@
                                                                 <td className="px-4 py-3 text-right text-slate-600 border-r border-slate-200">{formatCurrency(proj.totalUsed)}</td>
                                                                 <td className={`px-4 py-3 text-right font-bold border-r border-slate-200 ${proj.remaining < 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(proj.remaining)}</td>
                                                                 <td className="px-4 py-3 text-center border-r border-slate-200">
-                                                                    <div className="flex flex-col items-center">
+                                                                    <div className={`flex flex-col items-center ${proj.isOverLimit ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
                                                                         <span>{proj.ratio}%</span>
-                                                                        {proj.isOverLimit && <span className="text-[10px] text-red-500 font-bold">超支</span>}
-                                                                        {proj.isFlowing && !proj.isOverLimit && <span className="text-[10px] text-yellow-600 font-bold">流用</span>}
+                                                                        {proj.isOverLimit && <span className="text-[10px] text-red-500">(超支)</span>}
                                                                     </div>
-                                                                </td>
-                                                                <td className="px-4 py-3 text-center border-r border-slate-200">
-                                                                    {proj.isOverLimit ? <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 超支違規</span> : proj.isFlowing ? <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 流用中</span> : <span className="text-xs text-slate-400">-</span>}
                                                                 </td>
                                                                 <td className="px-4 py-3 text-right text-green-700 border-r border-slate-200 bg-green-50/30">{proj.archived > 0 ? formatCurrency(proj.archived) : '-'}</td>
                                                                 <td className="px-4 py-3 text-right text-yellow-700 border-r border-slate-200 bg-yellow-50/30">{proj.submitted > 0 ? formatCurrency(proj.submitted) : '-'}</td>
@@ -762,7 +784,7 @@
                                     <div className="max-w-[95%] mx-auto animate-fade-in">
                                         <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
                                             <div className="bg-blue-600 px-6 py-4 text-white flex justify-between items-center">
-                                                <div><h3 className="font-bold text-lg flex items-center gap-2"><PlusCircle className="h-5 w-5" /> 活動支出概況</h3><p className="text-blue-100 text-xs mt-1">目前新增至 {currentYear} 年度</p></div>
+                                                <div><h3 className="font-bold text-lg flex items-center gap-2"><PlusCircle className="h-5 w-5" /> 支出登錄</h3><p className="text-blue-100 text-xs mt-1">目前新增至 {currentYear} 年度</p></div>
                                                 <div className="bg-blue-700 px-4 py-2 rounded-lg"><span className="text-xs text-blue-200 block">本批次總金額</span><span className="text-xl font-bold">{formatCurrency(batchTotal)}</span></div>
                                             </div>
                                             <form onSubmit={handleBatchSubmit} className="p-6">
@@ -776,6 +798,12 @@
                                                             <label className="block text-sm font-medium text-slate-700 mb-1">歸屬月份</label>
                                                             <select name="month" value={batchHeader.month} onChange={handleHeaderChange} className="w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 py-2 px-3 border bg-white">
                                                                 {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                                                            </select>
+                                                        </div>
+                                                        <div className="w-full md:w-32">
+                                                            <label className="block text-sm font-medium text-slate-700 mb-1">業務類別</label>
+                                                            <select name="businessCategory" value={batchHeader.businessCategory} onChange={handleHeaderChange} className="w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 py-2 px-3 border bg-white">
+                                                                {BUSINESS_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                                             </select>
                                                         </div>
                                                         <div className="w-full flex-1">
@@ -870,76 +898,6 @@
                                     </div>
                                 )}
 
-                                {/* Query Tab */}
-                                {activeTab === 'query' && (
-                                    <div className="max-w-3xl mx-auto animate-fade-in">
-                                        <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
-                                            <div className="bg-blue-600 px-6 py-4 text-white">
-                                                <h3 className="font-bold text-lg flex items-center gap-2"><Search className="h-5 w-5" /> 查詢統計</h3>
-                                            </div>
-                                            <div className="p-6">
-                                                <div className="flex gap-2 mb-6">
-                                                    <div className="relative flex-1">
-                                                        <User className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-                                                        <input 
-                                                            type="text" 
-                                                            placeholder="請輸入姓名或單位名稱 (精確搜尋)..." 
-                                                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                            value={searchQuery}
-                                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {searchResult && (
-                                                    <div className="space-y-6 animate-fade-in-down">
-                                                        <div className="grid grid-cols-2 gap-4">
-                                                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-center">
-                                                                <p className="text-sm text-slate-500 mb-1">總筆數</p>
-                                                                <p className="text-2xl font-bold text-slate-700">{searchResult.count} 筆</p>
-                                                            </div>
-                                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-center">
-                                                                <p className="text-sm text-blue-600 mb-1">總金額</p>
-                                                                <p className="text-2xl font-bold text-blue-700">{formatCurrency(searchResult.totalAmount)}</p>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="border rounded-lg overflow-hidden">
-                                                            <table className="w-full text-sm text-left">
-                                                                <thead className="bg-slate-100 text-slate-500">
-                                                                    <tr>
-                                                                        <th className="px-4 py-3">月份</th>
-                                                                        <th className="px-4 py-3">活動名稱</th>
-                                                                        <th className="px-4 py-3 text-right">金額</th>
-                                                                        <th className="px-4 py-3 text-center">狀態</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="divide-y divide-slate-100">
-                                                                    {searchResult.items.map((item, idx) => (
-                                                                        <tr key={idx} className="hover:bg-slate-50">
-                                                                            <td className="px-4 py-3 text-slate-600">{item.month}</td>
-                                                                            <td className="px-4 py-3 font-medium text-slate-800">{item.activityName}</td>
-                                                                            <td className="px-4 py-3 text-right font-bold text-slate-700">{formatCurrency(item.amount)}</td>
-                                                                            <td className="px-4 py-3 text-center">
-                                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${item.status === '已歸檔' ? 'bg-green-50 text-green-700 border-green-200' : item.status === '送核銷' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{item.status}</span>
-                                                                            </td>
-                                                                        </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                            </table>
-                                                            {searchResult.count === 0 && (
-                                                                <div className="p-8 text-center text-slate-400">
-                                                                    <p>沒有找到符合 "{searchQuery}" 的資料</p>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
                                 {/* Log Tab */}
                                 {activeTab === 'log' && (
                                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 animate-fade-in overflow-hidden">
@@ -973,7 +931,11 @@
                                                                     </div>
                                                                 </td>
                                                                 <td className="px-4 py-4 text-slate-600 font-medium">{group.month}</td>
-                                                                <td className="px-4 py-4 font-bold text-slate-800 text-base">{group.activityName}<span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{group.items.length} 筆明細</span></td>
+                                                                <td className="px-4 py-4 font-bold text-slate-800 text-base">
+                                                                    {group.businessCategory && <span className="mr-2 text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600">[{group.businessCategory}]</span>}
+                                                                    {group.activityName}
+                                                                    <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{group.items.length} 筆明細</span>
+                                                                </td>
                                                                 <td className="px-4 py-4 text-right font-medium text-blue-900">{formatCurrency(group.subsidyAmount)}</td>
                                                                 <td className="px-4 py-4 text-right font-medium text-sky-600">{formatCurrency(group.matchingAmount)}</td>
                                                                 <td className="px-4 py-4 text-right font-bold text-slate-800">{formatCurrency(group.totalAmount)}</td>
@@ -1057,6 +1019,76 @@
                                                     ))}
                                                 </tbody>
                                             </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Query Tab */}
+                                {activeTab === 'query' && (
+                                    <div className="max-w-3xl mx-auto animate-fade-in">
+                                        <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
+                                            <div className="bg-blue-600 px-6 py-4 text-white">
+                                                <h3 className="font-bold text-lg flex items-center gap-2"><Search className="h-5 w-5" /> 查詢統計</h3>
+                                            </div>
+                                            <div className="p-6">
+                                                <div className="flex gap-2 mb-6">
+                                                    <div className="relative flex-1">
+                                                        <User className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+                                                        <input 
+                                                            type="text" 
+                                                            placeholder="請輸入姓名或單位名稱 (精確搜尋)..." 
+                                                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                            value={searchQuery}
+                                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {searchResult && (
+                                                    <div className="space-y-6 animate-fade-in-down">
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-center">
+                                                                <p className="text-sm text-slate-500 mb-1">總筆數</p>
+                                                                <p className="text-2xl font-bold text-slate-700">{searchResult.count} 筆</p>
+                                                            </div>
+                                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-center">
+                                                                <p className="text-sm text-blue-600 mb-1">總金額</p>
+                                                                <p className="text-2xl font-bold text-blue-700">{formatCurrency(searchResult.totalAmount)}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="border rounded-lg overflow-hidden">
+                                                            <table className="w-full text-sm text-left">
+                                                                <thead className="bg-slate-100 text-slate-500">
+                                                                    <tr>
+                                                                        <th className="px-4 py-3">月份</th>
+                                                                        <th className="px-4 py-3">活動名稱</th>
+                                                                        <th className="px-4 py-3 text-right">金額</th>
+                                                                        <th className="px-4 py-3 text-center">狀態</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-slate-100">
+                                                                    {searchResult.items.map((item, idx) => (
+                                                                        <tr key={idx} className="hover:bg-slate-50">
+                                                                            <td className="px-4 py-3 text-slate-600">{item.month}</td>
+                                                                            <td className="px-4 py-3 font-medium text-slate-800">{item.activityName}</td>
+                                                                            <td className="px-4 py-3 text-right font-bold text-slate-700">{formatCurrency(item.amount)}</td>
+                                                                            <td className="px-4 py-3 text-center">
+                                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${item.status === '已歸檔' ? 'bg-green-50 text-green-700 border-green-200' : item.status === '送核銷' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{item.status}</span>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                            {searchResult.count === 0 && (
+                                                                <div className="p-8 text-center text-slate-400">
+                                                                    <p>沒有找到符合 "{searchQuery}" 的資料</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
