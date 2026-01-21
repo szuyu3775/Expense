@@ -32,7 +32,7 @@
         }
     </script>
 </head>
-<body class="bg-slate-50 text-slate-800 text-base">
+<body class="bg-slate-50 text-slate-800">
     <!-- 這是 React 程式顯示的「掛載點」 -->
     <div id="root"></div>
 
@@ -62,9 +62,10 @@
         const PREMIUM_RATE = 0.0211;
         const PREMIUM_ELIGIBLE_TYPES = ['出席費', '諮詢費', '鐘點費'];
 
-        // --- 樣式設定 ---
+        // --- 樣式設定 (統一管理) ---
+        // 標題樣式：粗體 + 深色
         const labelStyle = "block text-sm font-bold text-slate-700 mb-1";
-        // 加強邊框顯眼度 border-2 border-blue-200
+        // 輸入框樣式：明顯淺藍色邊框 + 圓角
         const inputStyle = "w-full rounded-lg border-2 border-blue-200 text-base py-2 px-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors bg-white";
 
         // --- 輔助函式：取得標籤樣式 ---
@@ -182,7 +183,7 @@
                          showNotification(error.message.includes('密碼') ? '密碼錯誤，存取被拒' : '連線失敗，請檢查網路', 'error');
                     }
                     if (error.message.includes('密碼') || error.message.includes('拒絕')) {
-                        handleLogout();
+                        handleLogout(); 
                     }
                     return false;
                 } finally {
@@ -546,7 +547,7 @@
                             <div className="flex flex-col items-center mb-6">
                                 <div className="bg-blue-600 p-3 rounded-xl mb-3 shadow-lg shadow-blue-200"><Wallet className="h-8 w-8 text-white" /></div>
                                 <h2 className="text-xl font-bold text-slate-800">致理資教職輔計畫經費控管系統</h2>
-                                <p className="text-sm text-slate-500">經費控管系統</p>
+                                <p className="text-sm text-slate-500">經費控管系統 (Secure)</p>
                             </div>
                             <form onSubmit={handleLogin} className="space-y-4">
                                 <div>
@@ -569,7 +570,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.4.2 | 更新時間：2026/01/21 14:20</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.3.0 | 更新時間：2026/01/21 14:00</p>
                             </div>
                         </div>
                     </div>
@@ -815,19 +816,11 @@
                                         </div>
 
                                         <datalist id="payee-suggestions">
-                                            {Object.entries(payeeHistory).map(([category, names]) => (
-                                                names.map(name => <option key={`${category}-${name}`} value={name} />)
-                                            ))}
+                                            {commonPayees.map(name => <option key={name} value={name} />)}
                                         </datalist>
 
                                         <div className="space-y-4">
-                                            {batchItems.map((item, index) => {
-                                                // 動態產生該列專屬的 datalist ID
-                                                const listId = `payee-list-${item.id}`;
-                                                // 取得該類別的歷史名單
-                                                const currentSuggestions = payeeHistory[item.payeeCategory] || [];
-
-                                                return (
+                                            {batchItems.map((item, index) => (
                                                 <div key={item.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 relative hover:shadow-md transition-shadow group">
                                                     <button type="button" onClick={() => removeItemRow(item.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50"><Trash2 className="h-5 w-5" /></button>
                                                     
@@ -855,27 +848,6 @@
                                                             <select value={item.expenseType} onChange={(e) => handleItemChange(item.id, 'expenseType', e.target.value)} className={inputStyle}>
                                                                 {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                                             </select>
-                                                            {/* 快捷按鈕移至此處 */}
-                                                            <div className="flex gap-2 mt-2 flex-wrap">
-                                                                {item.expenseType === '餐點費' && (
-                                                                    <>
-                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 40)} className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded border border-orange-200 hover:bg-orange-200 transition-colors">$40</button>
-                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 120)} className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded border border-orange-200 hover:bg-orange-200 transition-colors">$120</button>
-                                                                    </>
-                                                                )}
-                                                                {['出席費', '諮詢費'].includes(item.expenseType) && (
-                                                                    <>
-                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2000)} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded border border-blue-200 hover:bg-blue-200 transition-colors">$2,000</button>
-                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2500)} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded border border-blue-200 hover:bg-blue-200 transition-colors">$2,500</button>
-                                                                    </>
-                                                                )}
-                                                                {item.expenseType === '鐘點費' && (
-                                                                    <>
-                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 1000)} className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-200 hover:bg-purple-200 transition-colors">$1,000</button>
-                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2000)} className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-200 hover:bg-purple-200 transition-colors">$2,000</button>
-                                                                    </>
-                                                                )}
-                                                            </div>
                                                         </div>
                                                         
                                                         {/* Row 2 */}
@@ -884,7 +856,7 @@
                                                             <input type="text" placeholder="細節說明" value={item.item} onChange={(e) => handleItemChange(item.id, 'item', e.target.value)} className={inputStyle} />
                                                         </div>
 
-                                                        {/* Row 3: Merged Payee + Amount Info (Layout Optimized) */}
+                                                        {/* Row 3: Merged Payee + Amount Info */}
                                                         <div className="md:col-span-12 flex flex-col md:flex-row gap-4 items-end bg-blue-50/50 p-3 rounded-lg border border-blue-100">
                                                             
                                                             <div className="w-full md:w-32 flex-none">
@@ -896,23 +868,18 @@
                                                             
                                                             <div className="w-full flex-1">
                                                                 <label className={labelStyle}>人員/單位名稱 <span className="text-red-500">*</span></label>
-                                                                <input 
-                                                                    type="text" 
-                                                                    placeholder="請輸入姓名" 
-                                                                    value={item.payeeName} 
-                                                                    onChange={(e) => handleItemChange(item.id, 'payeeName', e.target.value)} 
-                                                                    list={listId} // 使用動態 ID
-                                                                    className={inputStyle} 
-                                                                />
-                                                                {/* 每一列專屬的 datalist */}
-                                                                <datalist id={listId}>
-                                                                    {currentSuggestions.map(name => <option key={name} value={name} />)}
-                                                                </datalist>
+                                                                <input type="text" placeholder="請輸入姓名" value={item.payeeName} onChange={(e) => handleItemChange(item.id, 'payeeName', e.target.value)} list={item.payeeCategory === '業師' ? "payee-suggestions" : undefined} className={inputStyle} />
                                                             </div>
 
                                                             <div className="w-full md:w-28 flex-none relative">
                                                                 <label className={labelStyle}>單價</label>
                                                                 <input type="number" placeholder="0" value={item.unitPrice} onChange={(e) => handleItemChange(item.id, 'unitPrice', e.target.value)} className={inputStyle + " text-right font-mono"} />
+                                                                {item.expenseType === '餐點費' && (
+                                                                    <div className="absolute top-0 right-0 flex gap-1 -mt-6">
+                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 40)} className="text-[10px] px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full hover:bg-orange-200 transition-colors border border-orange-300 shadow-sm">$40</button>
+                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 120)} className="text-[10px] px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full hover:bg-orange-200 transition-colors border border-orange-300 shadow-sm">$120</button>
+                                                                    </div>
+                                                                )}
                                                             </div>
 
                                                             <div className="text-slate-400 font-bold pb-3">×</div>
@@ -931,7 +898,7 @@
                                                         </div>
                                                     </div>
                                                 </div>
-                                            )})}
+                                            ))}
                                         </div>
 
                                         <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur border-t border-slate-200 p-4 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
@@ -1127,7 +1094,7 @@
                                                         <input 
                                                             type="text" 
                                                             placeholder="請輸入姓名或單位名稱 (精確搜尋)..." 
-                                                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border-2 border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
                                                             value={searchQuery}
                                                             onChange={(e) => setSearchQuery(e.target.value)}
                                                         />
