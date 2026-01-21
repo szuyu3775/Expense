@@ -45,7 +45,7 @@
             PlusCircle, Wallet, FileText, AlertCircle, Save, X, Table, Trash2, Plus, 
             CheckCircle2, Calendar, Hash, ClipboardList, Coins, Archive, ChevronDown, 
             ChevronRight, Settings, Shuffle, Pencil, Check, Loader2, ArrowRightCircle, 
-            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Tag, Filter, ListFilter, Edit
+            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Tag, Filter, ListFilter, Edit, BarChart2
         } from 'https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0';
 
         // --- 設定區 ---
@@ -65,8 +65,13 @@
         // --- 樣式設定 ---
         const labelStyle = "block text-sm font-bold text-slate-700 mb-1";
         const inputStyle = "w-full rounded-lg border-2 border-blue-200 text-base py-2 px-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors bg-white";
+        // 表格內輸入框樣式
+        const tableInputStyle = "w-full border-2 border-blue-100 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm transition-colors bg-white";
+        // 表格標題樣式 (修正圖層順序 z-20)
+        const tableHeaderStyle = "px-3 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider bg-slate-100 border-b-2 border-slate-300 whitespace-nowrap sticky top-0 z-20 shadow-sm"; 
+        const tableCellStyle = "px-1.5 py-2 border-b border-slate-100 align-top";
 
-        // --- 輔助函式：取得標籤樣式 ---
+        // --- 輔助函式 ---
         const getCategoryStyle = (category) => {
             switch (category) {
                 case '出差': return 'bg-green-50 text-green-700 border border-green-200';
@@ -119,12 +124,9 @@
             // 編輯與新增狀態
             const [editingId, setEditingId] = useState(null);
             const [editFormData, setEditFormData] = useState({});
-            
-            // 群組編輯狀態 (新增功能)
             const [editingGroupKey, setEditingGroupKey] = useState(null);
             const [editGroupData, setEditGroupData] = useState({});
 
-            // 專案設定 (固定)
             const [projects] = useState([
                 { id: 1, name: '職涯-課程(補)', type: 'subsidy', description: '教育部補助' },
                 { id: 2, name: '職涯-課程(配)', type: 'matching', description: '學校配合款' },
@@ -289,6 +291,52 @@
                 }
             }, [searchQuery, currentYearTransactions, activeTab]);
 
+            // 矩陣報表計算
+            const matrixReport = useMemo(() => {
+                const rowMap = new Map();
+                
+                currentYearTransactions.forEach(t => {
+                    const rowKey = `${t.month}-${t.businessCategory}-${t.activityName}`;
+                    
+                    if (!rowMap.has(rowKey)) {
+                        rowMap.set(rowKey, {
+                            month: t.month,
+                            businessCategory: t.businessCategory || '無',
+                            activityName: t.activityName,
+                            total: 0,
+                            projectAmounts: {} 
+                        });
+                    }
+                    
+                    const row = rowMap.get(rowKey);
+                    const amount = Number(t.amount);
+                    
+                    row.projectAmounts[t.project] = (row.projectAmounts[t.project] || 0) + amount;
+                    row.total += amount;
+                });
+
+                const rows = Array.from(rowMap.values()).sort((a, b) => {
+                     const mA = parseInt((a.month || '').replace(/\D/g, '')) || 0;
+                     const mB = parseInt((b.month || '').replace(/\D/g, '')) || 0;
+                     return mA - mB;
+                });
+
+                const colTotals = {};
+                projects.forEach(p => colTotals[p.name] = 0);
+                let grandTotal = 0;
+
+                rows.forEach(r => {
+                    projects.forEach(p => {
+                        const val = r.projectAmounts[p.name] || 0;
+                        colTotals[p.name] = (colTotals[p.name] || 0) + val;
+                    });
+                    grandTotal += r.total;
+                });
+
+                return { rows, colTotals, grandTotal };
+            }, [currentYearTransactions, projects]);
+
+
             const projectStats = useMemo(() => {
                 return projects.map(proj => {
                     const budgetRecord = yearlyBudgets.find(b => Number(b.year) === currentYear && Number(b.projectId) === proj.id);
@@ -328,6 +376,7 @@
             const groupedTransactions = useMemo(() => {
                 const groups = {};
                 
+                // 多重篩選邏輯
                 const filteredTransactions = currentYearTransactions.filter(t => {
                     const matchCategory = filterCategory === '全部' || t.businessCategory === filterCategory;
                     const matchStatus = filterStatus === '全部' || t.status === filterStatus;
@@ -451,6 +500,28 @@
                     return; 
                 }
 
+                // --- 總量控管邏輯 ---
+                let batchSubsidyTotal = 0;
+                let batchMatchingTotal = 0;
+
+                batchItems.forEach(item => {
+                    const projectDef = projects.find(p => p.name === item.project);
+                    const amount = Math.round(Number(item.unitPrice) * Number(item.quantity));
+                    if (projectDef) {
+                        if (projectDef.type === 'subsidy') batchSubsidyTotal += amount;
+                        if (projectDef.type === 'matching') batchMatchingTotal += amount;
+                    }
+                });
+
+                if (batchSubsidyTotal > summaryStats.subsidy.remaining) {
+                    showNotification(`補助款超支！本批需 ${formatCurrency(batchSubsidyTotal)}，但僅剩 ${formatCurrency(summaryStats.subsidy.remaining)}`, 'error');
+                    return;
+                }
+                if (batchMatchingTotal > summaryStats.matching.remaining) {
+                    showNotification(`配合款超支！本批需 ${formatCurrency(batchMatchingTotal)}，但僅剩 ${formatCurrency(summaryStats.matching.remaining)}`, 'error');
+                    return;
+                }
+
                 const newTrans = batchItems.map((item, idx) => ({
                     uid: `new_${Date.now()}_${idx}`, id: '', year: Number(batchHeader.year), month: batchHeader.month, activityName: batchHeader.activityName, businessCategory: batchHeader.businessCategory, project: item.project, expenseType: item.expenseType, item: item.item, payeeCategory: item.payeeCategory, payeeName: item.payeeName, unitPrice: Number(item.unitPrice), quantity: Number(item.quantity), amount: Math.round(Number(item.unitPrice)*Number(item.quantity)), status: '未核銷', archiveDate: ''
                 }));
@@ -488,7 +559,6 @@
             };
             const handleEditFormChange = (f, v) => setEditFormData(prev => ({...prev, [f]: v}));
 
-            // --- 群組編輯功能 ---
             const handleStartGroupEdit = (group) => {
                 setEditingGroupKey(group.key);
                 setEditGroupData({
@@ -508,7 +578,6 @@
                 setSavingMessage('正在更新活動資訊...');
                 try {
                     let hasError = false;
-                    // 對該群組內的每一筆明細進行更新
                     for (const item of originalGroupItems) {
                         const updatedItem = { 
                             ...item, 
@@ -519,9 +588,7 @@
                         const result = await postToGAS('update', updatedItem);
                         if (!result) hasError = true;
                     }
-                    
                     await fetchAllData(authKey);
-                    
                     if (hasError) {
                         showNotification('部分資料更新失敗', 'error');
                     } else {
@@ -536,7 +603,6 @@
                     setIsSaving(false);
                 }
             };
-            // --------------------
 
             const handleDeleteGroup = (e, groupItems) => {
                 e.stopPropagation(); 
@@ -640,7 +706,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.3.3 | 更新時間：2026/01/21 16:00</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.4.8 | 更新時間：2026/01/22 00:10</p>
                             </div>
                         </div>
                     </div>
@@ -649,6 +715,7 @@
 
             return (
                 <div className="min-h-screen bg-slate-50 text-slate-800 font-sans relative">
+                    {/* 遮罩 */}
                     {(isLoading || isSaving) && (
                         <div className="fixed inset-0 bg-white/60 z-50 flex items-center justify-center backdrop-blur-sm">
                             <div className="flex flex-col items-center p-6 bg-white rounded-xl shadow-xl border border-slate-100">
@@ -702,7 +769,7 @@
                         </div>
                     )}
 
-                    <div className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10">
+                    <div className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-30">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="flex justify-between items-center h-16">
                                 <div className="flex items-center gap-2">
@@ -710,11 +777,12 @@
                                     <span className="font-bold text-xl text-slate-800 tracking-tight">致理資教職輔計畫經費控管系統</span>
                                 </div>
                                 <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg">
-                                    {['dashboard', 'entry', 'log', 'query', 'settings'].map(tab => (
+                                    {['dashboard', 'entry', 'log', 'report', 'query', 'settings'].map(tab => (
                                         <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-1 ${activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                                             {tab === 'dashboard' && '經費執行情形'}
                                             {tab === 'entry' && '支出登錄'}
                                             {tab === 'log' && '明細紀錄'}
+                                            {tab === 'report' && '經費支出一覽表'}
                                             {tab === 'query' && '查詢統計'}
                                             {tab === 'settings' && <><Settings className="w-4 h-4" /> 預算設定</>}
                                         </button>
@@ -738,6 +806,7 @@
                                     {activeTab === 'dashboard' && '經費執行情形'}
                                     {activeTab === 'entry' && '支出登錄'}
                                     {activeTab === 'log' && '明細紀錄'}
+                                    {activeTab === 'report' && '經費支出一覽表'}
                                     {activeTab === 'query' && '查詢統計'}
                                     {activeTab === 'settings' && '系統設定'}
                                 </h2>
@@ -867,8 +936,8 @@
 
                                 {/* Entry Tab */}
                                 {activeTab === 'entry' && (
-                                    <div className="max-w-4xl mx-auto py-6 px-4 pb-24 animate-fade-in">
-                                        <div className="sticky top-16 z-20 bg-white/95 backdrop-blur border border-slate-200 shadow-sm rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center justify-between">
+                                    <div className="max-w-[95%] mx-auto py-6 px-4 pb-24 animate-fade-in">
+                                        <div className="sticky top-16 z-30 bg-white/95 backdrop-blur border border-slate-200 shadow-sm rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center justify-between">
                                             <div className="flex gap-4 flex-wrap items-center flex-1">
                                                 <div className="flex items-center gap-2">
                                                     <Calendar className="w-5 h-5 text-slate-400" />
@@ -890,120 +959,150 @@
                                         </datalist>
 
                                         <div className="space-y-4">
-                                            {batchItems.map((item, index) => (
-                                                <div key={item.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 relative hover:shadow-md transition-shadow group animate-fade-in-down">
-                                                    <button type="button" onClick={() => removeItemRow(item.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50"><Trash2 className="h-5 w-5" /></button>
-                                                    
-                                                    {/* Visual Cue for new item */}
-                                                    {index === batchItems.length - 1 && batchItems.length > 1 && (
-                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400 rounded-l-xl"></div>
-                                                    )}
+                                            {/* Table Header for Entry */}
+                                            <div className="hidden md:block bg-slate-100 rounded-t-lg border border-slate-200 overflow-hidden">
+                                                <table className="w-full text-left">
+                                                    <thead>
+                                                        <tr>
+                                                            <th className={tableHeaderStyle + " w-[40px] text-center"}>#</th>
+                                                            <th className={tableHeaderStyle + " min-w-[200px]"}>經費來源</th>
+                                                            <th className={tableHeaderStyle + " min-w-[120px]"}>支出項目</th>
+                                                            <th className={tableHeaderStyle + " min-w-[200px]"}>補充說明</th>
+                                                            <th className={tableHeaderStyle + " min-w-[100px]"}>對象類型</th>
+                                                            <th className={tableHeaderStyle + " min-w-[120px]"}>人員/單位名稱 <span className="text-red-500">*</span></th>
+                                                            <th className={tableHeaderStyle + " min-w-[100px] text-right"}>單價</th>
+                                                            <th className={tableHeaderStyle + " min-w-[80px] text-center"}>數量</th>
+                                                            <th className={tableHeaderStyle + " min-w-[100px] text-right"}>總價</th>
+                                                            <th className={tableHeaderStyle + " w-[50px]"}></th>
+                                                        </tr>
+                                                    </thead>
+                                                </table>
+                                            </div>
 
-                                                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                                                        {/* Row 1 */}
-                                                        <div className="md:col-span-6">
-                                                            <label className={labelStyle}>經費來源</label>
-                                                            <select value={item.project} onChange={(e) => handleItemChange(item.id, 'project', e.target.value)} className={inputStyle}>
-                                                                {projects.map(p => {
-                                                                    const stats = projectStats.find(s=>s.id===p.id);
-                                                                    return (
-                                                                        <option 
-                                                                            key={p.id} 
-                                                                            value={p.name}
-                                                                            className={getProjectStyle(p.name)}
-                                                                        >
-                                                                            {p.name} 餘:{formatCurrency(stats?stats.remaining:0)}
-                                                                        </option>
-                                                                    );
-                                                                })}
+                                            {/* Single Table Body for Entry */}
+                                            <div className="hidden md:block bg-white rounded-b-lg shadow-sm border-x border-b border-slate-200 overflow-x-auto" style={{maxHeight: 'calc(100vh - 300px)', overflowY: 'auto'}}>
+                                                 <table className="w-full">
+                                                     <tbody className="divide-y divide-slate-100">
+                                                        {batchItems.map((item, index) => (
+                                                            <tr key={item.id} className="hover:bg-slate-50 transition-colors align-top group animate-fade-in-down relative">
+                                                                {/* Visual Cue inside the first cell */}
+                                                                <td className="w-[40px] text-center p-2 text-slate-400 font-bold align-top pt-3 relative border-b border-slate-100">
+                                                                    {index === batchItems.length - 1 && batchItems.length > 1 && (
+                                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400"></div>
+                                                                    )}
+                                                                    {index + 1}
+                                                                </td>
+                                                                <td className="px-2 py-2 border-b border-slate-100 align-top min-w-[200px]">
+                                                                    <select value={item.project} onChange={(e) => handleItemChange(item.id, 'project', e.target.value)} className={tableInputStyle}>
+                                                                        {projects.map(p => {
+                                                                            const stats = projectStats.find(s=>s.id===p.id);
+                                                                            return (
+                                                                                <option key={p.id} value={p.name} className={getProjectStyle(p.name)}>
+                                                                                    {p.name} 餘:{formatCurrency(stats?stats.remaining:0)}
+                                                                                </option>
+                                                                            );
+                                                                        })}
+                                                                    </select>
+                                                                </td>
+                                                                <td className="px-2 py-2 border-b border-slate-100 align-top min-w-[120px]">
+                                                                    <select value={item.expenseType} onChange={(e) => handleItemChange(item.id, 'expenseType', e.target.value)} className={tableInputStyle}>
+                                                                        {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                                                    </select>
+                                                                    {/* 快捷按鈕區 */}
+                                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                                        {['出席費', '諮詢費'].includes(item.expenseType) && (
+                                                                            <>
+                                                                                <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2000)} className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-200 hover:bg-blue-100">2000</button>
+                                                                                <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2500)} className="text-[10px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-200 hover:bg-blue-100">2500</button>
+                                                                            </>
+                                                                        )}
+                                                                        {item.expenseType === '鐘點費' && (
+                                                                            <>
+                                                                                <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 1000)} className="text-[10px] px-1 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200 hover:bg-purple-100">1000</button>
+                                                                                <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2000)} className="text-[10px] px-1 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200 hover:bg-purple-100">2000</button>
+                                                                            </>
+                                                                        )}
+                                                                        {item.expenseType === '餐點費' && (
+                                                                            <>
+                                                                                <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 40)} className="text-[10px] px-1 py-0.5 bg-orange-50 text-orange-600 rounded border border-orange-200 hover:bg-orange-100">40</button>
+                                                                                <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 120)} className="text-[10px] px-1 py-0.5 bg-orange-50 text-orange-600 rounded border border-orange-200 hover:bg-orange-100">120</button>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-2 py-2 border-b border-slate-100 align-top min-w-[200px]">
+                                                                    <input type="text" placeholder="細節說明" value={item.item} onChange={(e) => handleItemChange(item.id, 'item', e.target.value)} className={tableInputStyle} />
+                                                                </td>
+                                                                <td className="px-2 py-2 border-b border-slate-100 align-top min-w-[100px]">
+                                                                    <select value={item.payeeCategory} onChange={(e) => handleItemChange(item.id, 'payeeCategory', e.target.value)} className={tableInputStyle}>
+                                                                        {PAYEE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                                                    </select>
+                                                                </td>
+                                                                <td className="px-2 py-2 border-b border-slate-100 align-top min-w-[120px]">
+                                                                    <input type="text" placeholder="請輸入姓名" value={item.payeeName} onChange={(e) => handleItemChange(item.id, 'payeeName', e.target.value)} list={item.payeeCategory === '業師' ? "payee-suggestions" : undefined} className={tableInputStyle} />
+                                                                </td>
+                                                                <td className="px-2 py-2 border-b border-slate-100 align-top min-w-[100px]">
+                                                                    <input type="number" placeholder="0" value={item.unitPrice} onChange={(e) => handleItemChange(item.id, 'unitPrice', e.target.value)} className={tableInputStyle + " text-right font-mono"} />
+                                                                </td>
+                                                                <td className="px-2 py-2 border-b border-slate-100 align-top min-w-[80px]">
+                                                                    <input type="number" placeholder="1" value={item.quantity} onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)} className={tableInputStyle + " text-center font-mono"} />
+                                                                </td>
+                                                                <td className="px-2 py-2 border-b border-slate-100 align-top min-w-[100px] text-right pt-3">
+                                                                    <span className="font-bold text-blue-600 font-mono">{formatCurrency(Math.round((Number(item.unitPrice) || 0) * (Number(item.quantity) || 0)))}</span>
+                                                                </td>
+                                                                <td className="px-2 py-2 border-b border-slate-100 align-top w-[50px] text-center pt-2">
+                                                                    <button type="button" onClick={() => removeItemRow(item.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="h-5 w-5" /></button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                     </tbody>
+                                                 </table>
+                                            </div>
+                                            {/* *** 修正結束 *** */}
+
+                                            {/* Mobile View: Stacked Card (Fallback) */}
+                                            <div className="md:hidden grid grid-cols-1 gap-3 p-3">
+                                                {batchItems.map((item, index) => (
+                                                    <div key={item.id} className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 relative">
+                                                         <div className="flex justify-between items-center mb-2">
+                                                            <span className="font-bold text-slate-500">#{index + 1}</span>
+                                                            <button type="button" onClick={() => removeItemRow(item.id)} className="text-red-400"><Trash2 className="h-5 w-5" /></button>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 gap-2">
+                                                             <select value={item.project} onChange={(e) => handleItemChange(item.id, 'project', e.target.value)} className={inputStyle}>
+                                                                {projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                                                             </select>
-                                                        </div>
-                                                        <div className="md:col-span-6">
-                                                            <label className={labelStyle}>支出項目</label>
-                                                            <select value={item.expenseType} onChange={(e) => handleItemChange(item.id, 'expenseType', e.target.value)} className={inputStyle}>
-                                                                {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                                                            </select>
-                                                            
-                                                            {/* 快捷按鈕區 (Moved Here) */}
-                                                            <div className="flex flex-wrap gap-2 mt-2">
-                                                                {['出席費', '諮詢費'].includes(item.expenseType) && (
-                                                                    <>
-                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2000)} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors border border-blue-300 font-medium">$2000</button>
-                                                                        <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2500)} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors border border-blue-300 font-medium">$2500</button>
-                                                                    </>
-                                                                )}
-                                                                {item.expenseType === '鐘點費' && (
-                                                                    <>
-                                                                         <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 1000)} className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors border border-purple-300 font-medium">$1000</button>
-                                                                         <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 2000)} className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors border border-purple-300 font-medium">$2000</button>
-                                                                    </>
-                                                                )}
-                                                                {item.expenseType === '餐點費' && (
-                                                                    <>
-                                                                         <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 40)} className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors border border-orange-300 font-medium">$40</button>
-                                                                         <button type="button" onClick={() => handleItemChange(item.id, 'unitPrice', 120)} className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors border border-orange-300 font-medium">$120</button>
-                                                                    </>
-                                                                )}
+                                                            {/* ... (其他手機版欄位，保持原樣或簡化) ... */}
+                                                            <input type="text" placeholder="姓名" value={item.payeeName} onChange={(e) => handleItemChange(item.id, 'payeeName', e.target.value)} className={inputStyle} />
+                                                            <div className="flex gap-2">
+                                                                <input type="number" placeholder="單價" value={item.unitPrice} onChange={(e) => handleItemChange(item.id, 'unitPrice', e.target.value)} className={inputStyle} />
+                                                                <input type="number" placeholder="數量" value={item.quantity} onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)} className={inputStyle} />
                                                             </div>
-                                                        </div>
-                                                        
-                                                        {/* Row 2 */}
-                                                        <div className="md:col-span-12">
-                                                            <label className={labelStyle}>補充說明</label>
-                                                            <input type="text" placeholder="細節說明" value={item.item} onChange={(e) => handleItemChange(item.id, 'item', e.target.value)} className={inputStyle} />
-                                                        </div>
-
-                                                        {/* Row 3: Merged Payee + Amount Info */}
-                                                        <div className="md:col-span-12 flex flex-col md:flex-row gap-4 items-end bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-                                                            
-                                                            <div className="w-full md:w-32 flex-none">
-                                                                <label className={labelStyle}>對象類型</label>
-                                                                <select value={item.payeeCategory} onChange={(e) => handleItemChange(item.id, 'payeeCategory', e.target.value)} className={inputStyle}>
-                                                                    {PAYEE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                                                </select>
-                                                            </div>
-                                                            
-                                                            <div className="w-full flex-1">
-                                                                <label className={labelStyle}>人員/單位名稱 <span className="text-red-500">*</span></label>
-                                                                <input type="text" placeholder="請輸入姓名" value={item.payeeName} onChange={(e) => handleItemChange(item.id, 'payeeName', e.target.value)} list={item.payeeCategory === '業師' ? "payee-suggestions" : undefined} className={inputStyle} />
-                                                            </div>
-
-                                                            <div className="w-full md:w-28 flex-none relative">
-                                                                <label className={labelStyle}>單價</label>
-                                                                <input type="number" placeholder="0" value={item.unitPrice} onChange={(e) => handleItemChange(item.id, 'unitPrice', e.target.value)} className={inputStyle + " text-right font-mono"} />
-                                                            </div>
-
-                                                            <div className="text-slate-400 font-bold pb-3">×</div>
-
-                                                            <div className="w-full md:w-20 flex-none">
-                                                                <label className={labelStyle}>數量</label>
-                                                                <input type="number" placeholder="1" value={item.quantity} onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)} className={inputStyle + " text-center font-mono"} />
-                                                            </div>
-
-                                                            <div className="text-slate-400 font-bold pb-3">=</div>
-
-                                                            <div className="min-w-[100px] text-right pb-3">
-                                                                <div className="text-xl font-bold text-blue-600 font-mono tracking-tight">{formatCurrency(Math.round((Number(item.unitPrice) || 0) * (Number(item.quantity) || 0)))}</div>
-                                                            </div>
-
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                ))}
+                                            </div>
                                         </div>
 
                                         <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur border-t border-slate-200 p-4 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-                                            <div className="max-w-5xl mx-auto flex justify-between items-center">
-                                                <div className="flex items-baseline gap-2">
-                                                    <span className="text-sm text-slate-500">本批次總金額</span>
-                                                    <span className="text-2xl font-bold text-slate-800 font-mono">{formatCurrency(batchTotal)}</span>
-                                                </div>
+                                            <div className="max-w-7xl mx-auto flex justify-between items-center">
                                                 <div className="flex gap-3">
-                                                    <button type="button" onClick={addItemRow} className="hidden md:flex items-center gap-2 text-slate-600 hover:text-blue-600 px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors font-medium"><Plus className="h-5 w-5" /> 新增明細</button>
+                                                    <button type="button" onClick={addItemRow} className="hidden md:flex items-center gap-2 text-slate-600 hover:text-blue-600 px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors font-medium border border-slate-200"><Plus className="h-5 w-5" /> 新增明細</button>
                                                     <button type="button" onClick={addItemRow} className="md:hidden p-2 rounded-full bg-slate-100 text-slate-600"><Plus className="h-6 w-6" /></button>
                                                     
                                                     <button type="button" onClick={addPremiumRow} className="hidden md:flex items-center gap-2 text-purple-600 hover:text-purple-700 px-4 py-2 rounded-lg hover:bg-purple-50 transition-colors border border-purple-200 font-medium"><Coins className="h-5 w-5" /> 保費</button>
-                                                    
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex flex-col items-end">
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="text-sm text-slate-500">本批次總金額</span>
+                                                            <span className="text-2xl font-bold text-slate-800 font-mono">{formatCurrency(batchTotal)}</span>
+                                                        </div>
+                                                        <div className="text-[10px] text-slate-400 flex gap-2">
+                                                            <span>(補助款餘額: {formatCurrency(summaryStats.subsidy.remaining)})</span>
+                                                            <span>(配合款餘額: {formatCurrency(summaryStats.matching.remaining)})</span>
+                                                        </div>
+                                                    </div>
                                                     <button type="button" onClick={handleBatchSubmit} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all flex items-center gap-2 transform active:scale-95"><Save className="h-5 w-5" /> 儲存</button>
                                                 </div>
                                             </div>
@@ -1023,14 +1122,7 @@
                                                 
                                                 {/* 篩選工具列 */}
                                                 <div className="flex flex-wrap gap-2 items-center text-sm">
-                                                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg px-2 py-1 border border-slate-200">
-                                                        <Filter className="w-3 h-3 text-slate-400" />
-                                                        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-transparent font-medium text-slate-600 focus:outline-none border-none cursor-pointer">
-                                                            <option value="全部">全部類別</option>
-                                                            {BUSINESS_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                                        </select>
-                                                    </div>
-                                                    
+                                                    {/* 1. Status */}
                                                     <div className="flex items-center gap-1 bg-slate-100 rounded-lg px-2 py-1 border border-slate-200">
                                                         <ListFilter className="w-3 h-3 text-slate-400" />
                                                         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-transparent font-medium text-slate-600 focus:outline-none border-none cursor-pointer">
@@ -1039,6 +1131,16 @@
                                                         </select>
                                                     </div>
 
+                                                    {/* 2. Category */}
+                                                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg px-2 py-1 border border-slate-200">
+                                                        <Filter className="w-3 h-3 text-slate-400" />
+                                                        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="bg-transparent font-medium text-slate-600 focus:outline-none border-none cursor-pointer">
+                                                            <option value="全部">全部類別</option>
+                                                            {BUSINESS_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                                        </select>
+                                                    </div>
+
+                                                    {/* 3. Month */}
                                                     <div className="flex items-center gap-1 bg-slate-100 rounded-lg px-2 py-1 border border-slate-200">
                                                         <Calendar className="w-3 h-3 text-slate-400" />
                                                         <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className="bg-transparent font-medium text-slate-600 focus:outline-none border-none cursor-pointer">
@@ -1053,51 +1155,53 @@
                                             <table className="w-full text-sm text-left">
                                                 <thead className="text-sm text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
                                                     <tr>
-                                                        <th className="px-4 py-3 w-10"></th>
-                                                        <th className="px-4 py-3 whitespace-nowrap">狀態</th>
-                                                        <th className="px-4 py-3 whitespace-nowrap">歸屬月份</th>
-                                                        <th className="px-4 py-3 min-w-[200px]">活動名稱</th>
-                                                        <th className="px-4 py-3 text-right text-blue-900 whitespace-nowrap">補助款</th> 
-                                                        <th className="px-4 py-3 text-right text-sky-600 whitespace-nowrap">配合款</th> 
-                                                        <th className="px-4 py-3 text-right whitespace-nowrap">總金額</th>
-                                                        <th className="px-4 py-3 w-[120px] text-right whitespace-nowrap">操作</th>
+                                                        <th className="px-4 py-3 w-[40px]"></th>
+                                                        <th className="px-4 py-3 w-[110px] text-center">狀態</th>
+                                                        <th className="px-4 py-3 w-[90px] text-center">歸屬月份</th>
+                                                        <th className="px-4 py-3 w-auto min-w-[200px]">活動名稱</th>
+                                                        <th className="px-4 py-3 w-[110px] text-right text-blue-900">補助款</th> 
+                                                        <th className="px-4 py-3 w-[110px] text-right text-sky-600">配合款</th> 
+                                                        <th className="px-4 py-3 w-[110px] text-right">總金額</th>
+                                                        <th className="px-4 py-3 w-[140px] text-right">操作</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100">
                                                     {groupedTransactions.map((group) => (
                                                         <React.Fragment key={group.key}>
                                                             <tr className="hover:bg-blue-50 transition-colors cursor-pointer group border-l-4 border-l-transparent hover:border-l-blue-500" onClick={() => toggleGroup(group.key)}>
-                                                                <td className="px-4 py-4 text-slate-400">{expandedGroups[group.key] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
-                                                                <td className="px-4 py-4 text-center whitespace-nowrap w-[1%]">
-                                                                    <div className="flex flex-col items-center gap-1">
-                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${group.status === '已歸檔' ? 'bg-green-50 text-green-700 border-green-200' : group.status === '送核銷' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{group.status}</span>
-                                                                        {group.id && <span className="text-[10px] text-slate-400 font-mono tracking-tighter">{group.id}</span>}
+                                                                <td className="px-4 py-4 text-slate-400 text-center w-[40px]">{expandedGroups[group.key] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
+                                                                <td className="px-4 py-4 text-center w-[110px]">
+                                                                    <div className="flex flex-col items-center gap-1 w-full">
+                                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border w-full justify-center ${group.status === '已歸檔' ? 'bg-green-50 text-green-700 border-green-200' : group.status === '送核銷' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{group.status}</span>
+                                                                        {group.id && <span className="text-[10px] text-slate-400 font-mono tracking-tighter w-full break-all whitespace-normal block" title={group.id}>{group.id}</span>}
                                                                     </div>
                                                                 </td>
                                                                 <td className="px-4 py-4 text-slate-600 font-medium whitespace-nowrap w-[1%]">{group.month}</td>
-                                                                <td className="px-4 py-4 font-bold text-slate-800 text-base break-words min-w-[200px] flex items-center gap-2">
-                                                                    {group.businessCategory && (
-                                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getCategoryStyle(group.businessCategory)}`}>
-                                                                            [{group.businessCategory}]
-                                                                        </span>
-                                                                    )}
-                                                                    <span className="flex-1">{group.activityName}</span>
-                                                                    <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">{group.items.length} 筆</span>
+                                                                <td className="px-4 py-4 font-bold text-slate-800 text-base break-words w-auto min-w-[200px]">
+                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                        {group.businessCategory && (
+                                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getCategoryStyle(group.businessCategory)}`}>
+                                                                                [{group.businessCategory}]
+                                                                            </span>
+                                                                        )}
+                                                                        <span>{group.activityName}</span>
+                                                                        <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">{group.items.length} 筆</span>
                                                                     
-                                                                    {/* Group Edit Button */}
-                                                                    {group.status === '未核銷' && (
-                                                                        <button 
-                                                                            onClick={(e) => { e.stopPropagation(); handleStartGroupEdit(group); }} 
-                                                                            className="p-1 text-slate-300 hover:text-blue-500 rounded-full hover:bg-blue-50 transition-colors"
-                                                                        >
-                                                                            <Edit className="w-3 h-3" />
-                                                                        </button>
-                                                                    )}
+                                                                        {/* Group Edit Button */}
+                                                                        {group.status === '未核銷' && (
+                                                                            <button 
+                                                                                onClick={(e) => { e.stopPropagation(); handleStartGroupEdit(group); }} 
+                                                                                className="p-1 text-slate-300 hover:text-blue-500 rounded-full hover:bg-blue-50 transition-colors ml-auto"
+                                                                            >
+                                                                                <Edit className="w-3 h-3" />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
                                                                 </td>
-                                                                <td className="px-4 py-4 text-right font-medium text-blue-900 whitespace-nowrap w-[1%]">{formatCurrency(group.subsidyAmount)}</td>
-                                                                <td className="px-4 py-4 text-right font-medium text-sky-600 whitespace-nowrap w-[1%]">{formatCurrency(group.matchingAmount)}</td>
-                                                                <td className="px-4 py-4 text-right font-bold text-slate-800 whitespace-nowrap w-[1%]">{formatCurrency(group.totalAmount)}</td>
-                                                                <td className="px-4 py-4 w-[120px] text-right whitespace-nowrap">
+                                                                <td className="px-4 py-4 text-right font-medium text-blue-900 w-[110px]">{formatCurrency(group.subsidyAmount)}</td>
+                                                                <td className="px-4 py-4 text-right font-medium text-sky-600 w-[110px]">{formatCurrency(group.matchingAmount)}</td>
+                                                                <td className="px-4 py-4 text-right font-bold text-slate-800 w-[110px]">{formatCurrency(group.totalAmount)}</td>
+                                                                <td className="px-4 py-4 w-[140px] text-right">
                                                                     <div className="flex justify-end gap-1 items-center">
                                                                         {group.status === '未核銷' && (
                                                                             <button onClick={(e) => handleOpenStatusModal(e, 'promote_to_submitted', group.items)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition-colors" title="送出核銷"><ArrowRightCircle className="w-4 h-4" /></button>
@@ -1225,6 +1329,77 @@
                                                     ))}
                                                 </tbody>
                                             </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Report Tab (Matrix Report) */}
+                                {activeTab === 'report' && (
+                                    <div className="max-w-7xl mx-auto py-6 px-4 animate-fade-in">
+                                        <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
+                                            <div className="bg-blue-600 px-6 py-4 text-white">
+                                                <h3 className="font-bold text-lg flex items-center gap-2"><BarChart2 className="h-5 w-5" /> 經費支出一覽表</h3>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm border-collapse">
+                                                    <thead>
+                                                        <tr>
+                                                            {/* Fixed Columns */}
+                                                            <th className="bg-slate-100 border border-slate-300 px-4 py-2 text-center font-bold text-slate-700 sticky left-0 z-20 w-[80px] min-w-[80px] max-w-[80px]">月份</th>
+                                                            <th className="bg-slate-100 border border-slate-300 px-4 py-2 text-center font-bold text-slate-700 sticky left-[80px] z-20 w-[80px] min-w-[80px] max-w-[80px]">類別</th>
+                                                            <th className="bg-slate-100 border border-slate-300 px-4 py-2 text-center font-bold text-slate-700 sticky left-[160px] z-20 w-[200px] min-w-[200px]">活動名稱</th>
+                                                            
+                                                            {/* Project Columns */}
+                                                            {projects.map(p => (
+                                                                <th key={p.id} className="bg-slate-50 border border-slate-300 px-4 py-2 text-center font-bold text-slate-600 min-w-[100px] whitespace-nowrap">
+                                                                    {p.name.replace('職涯-', '')}
+                                                                </th>
+                                                            ))}
+                                                            
+                                                            <th className="bg-blue-50 border border-blue-200 px-4 py-2 text-center font-bold text-blue-800 min-w-[100px]">總計</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {matrixReport.rows.map((row, idx) => (
+                                                            <tr key={idx} className="hover:bg-slate-50">
+                                                                <td className="border border-slate-200 px-4 py-2 text-center sticky left-0 bg-white z-10 font-medium text-slate-600">{row.month}</td>
+                                                                <td className="border border-slate-200 px-4 py-2 text-center sticky left-[80px] bg-white z-10">
+                                                                    <span className={`text-xs px-2 py-1 rounded border ${getCategoryStyle(row.businessCategory)}`}>
+                                                                        {row.businessCategory}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="border border-slate-200 px-4 py-2 font-bold text-slate-800 sticky left-[160px] bg-white z-10">
+                                                                    {row.activityName}
+                                                                </td>
+                                                                
+                                                                {projects.map(p => {
+                                                                    const val = row.projectAmounts[p.name];
+                                                                    return (
+                                                                        <td key={p.id} className="border border-slate-200 px-4 py-2 text-right text-slate-600">
+                                                                            {val ? val.toLocaleString() : '-'}
+                                                                        </td>
+                                                                    );
+                                                                })}
+                                                                
+                                                                <td className="border border-blue-100 bg-blue-50/30 px-4 py-2 text-right font-bold text-blue-700">{row.total.toLocaleString()}</td>
+                                                            </tr>
+                                                        ))}
+
+                                                        {/* Total Row */}
+                                                        <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">
+                                                            <td className="border border-slate-300 px-4 py-3 text-center sticky left-0 bg-slate-100 z-10" colSpan={3}>年度總計</td>
+                                                            {projects.map(p => (
+                                                                <td key={p.id} className="border border-slate-300 px-4 py-3 text-right text-slate-800">
+                                                                    {matrixReport.colTotals[p.name]?.toLocaleString() || 0}
+                                                                </td>
+                                                            ))}
+                                                            <td className="border border-blue-300 bg-blue-100 px-4 py-3 text-right text-blue-900 text-lg">
+                                                                {matrixReport.grandTotal.toLocaleString()}
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
