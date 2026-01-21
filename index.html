@@ -45,11 +45,10 @@
             PlusCircle, Wallet, FileText, AlertCircle, Save, X, Table, Trash2, Plus, 
             CheckCircle2, Calendar, Hash, ClipboardList, Coins, Archive, ChevronDown, 
             ChevronRight, Settings, Shuffle, Pencil, Check, Loader2, ArrowRightCircle, 
-            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Tag, Filter, ListFilter
+            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Tag, Filter, ListFilter, Edit
         } from 'https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0';
 
         // --- 設定區 ---
-        // 您的 GAS 後端網址 (已確認為最新版)
         const API_URL = 'https://script.google.com/macros/s/AKfycbwCT-oLJM6dILv0Lt5J8mH4PhuQ8dyEBvM0VlUpQQqKZek2y4A5arax52eoFsIIQ9gg/exec'; 
 
         // --- 常數定義 ---
@@ -121,6 +120,10 @@
             const [editingId, setEditingId] = useState(null);
             const [editFormData, setEditFormData] = useState({});
             
+            // 群組編輯狀態 (新增功能)
+            const [editingGroupKey, setEditingGroupKey] = useState(null);
+            const [editGroupData, setEditGroupData] = useState({});
+
             // 專案設定 (固定)
             const [projects] = useState([
                 { id: 1, name: '職涯-課程(補)', type: 'subsidy', description: '教育部補助' },
@@ -325,7 +328,6 @@
             const groupedTransactions = useMemo(() => {
                 const groups = {};
                 
-                // 多重篩選邏輯
                 const filteredTransactions = currentYearTransactions.filter(t => {
                     const matchCategory = filterCategory === '全部' || t.businessCategory === filterCategory;
                     const matchStatus = filterStatus === '全部' || t.status === filterStatus;
@@ -413,14 +415,11 @@
                 }));
             };
 
-            // ★★★ 優化：新增明細時，自動帶入上一筆的設定 ★★★
             const addItemRow = () => {
                 setBatchItems(prev => {
-                    // 取得上一筆資料 (如果有)
                     const lastItem = prev[prev.length - 1];
                     return [...prev, { 
                         id: Date.now(), 
-                        // 如果有上一筆，就用上一筆的設定；否則用預設值
                         project: lastItem ? lastItem.project : projects[0].name, 
                         expenseType: lastItem ? lastItem.expenseType : '諮詢費', 
                         item: '', 
@@ -488,6 +487,56 @@
                 setIsSaving(false);
             };
             const handleEditFormChange = (f, v) => setEditFormData(prev => ({...prev, [f]: v}));
+
+            // --- 群組編輯功能 ---
+            const handleStartGroupEdit = (group) => {
+                setEditingGroupKey(group.key);
+                setEditGroupData({
+                    month: group.month,
+                    activityName: group.activityName,
+                    businessCategory: group.businessCategory
+                });
+            };
+
+            const handleCancelGroupEdit = () => {
+                setEditingGroupKey(null);
+                setEditGroupData({});
+            };
+
+            const handleSaveGroupEdit = async (originalGroupItems) => {
+                setIsSaving(true);
+                setSavingMessage('正在更新活動資訊...');
+                try {
+                    let hasError = false;
+                    // 對該群組內的每一筆明細進行更新
+                    for (const item of originalGroupItems) {
+                        const updatedItem = { 
+                            ...item, 
+                            month: editGroupData.month,
+                            activityName: editGroupData.activityName,
+                            businessCategory: editGroupData.businessCategory
+                        };
+                        const result = await postToGAS('update', updatedItem);
+                        if (!result) hasError = true;
+                    }
+                    
+                    await fetchAllData(authKey);
+                    
+                    if (hasError) {
+                        showNotification('部分資料更新失敗', 'error');
+                    } else {
+                        showNotification('活動資訊更新成功', 'success');
+                        setEditingGroupKey(null);
+                        setEditGroupData({});
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showNotification('更新發生錯誤', 'error');
+                } finally {
+                    setIsSaving(false);
+                }
+            };
+            // --------------------
 
             const handleDeleteGroup = (e, groupItems) => {
                 e.stopPropagation(); 
@@ -568,7 +617,7 @@
                             <div className="flex flex-col items-center mb-6">
                                 <div className="bg-blue-600 p-3 rounded-xl mb-3 shadow-lg shadow-blue-200"><Wallet className="h-8 w-8 text-white" /></div>
                                 <h2 className="text-xl font-bold text-slate-800">致理資教職輔計畫經費控管系統</h2>
-                                <p className="text-sm text-slate-500">經費控管系統</p>
+                                <p className="text-sm text-slate-500">經費控管系統 (Secure)</p>
                             </div>
                             <form onSubmit={handleLogin} className="space-y-4">
                                 <div>
@@ -591,7 +640,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.3.2 | 更新時間：2026/01/21 14:55</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.3.3 | 更新時間：2026/01/21 16:00</p>
                             </div>
                         </div>
                     </div>
@@ -1026,14 +1075,24 @@
                                                                     </div>
                                                                 </td>
                                                                 <td className="px-4 py-4 text-slate-600 font-medium whitespace-nowrap w-[1%]">{group.month}</td>
-                                                                <td className="px-4 py-4 font-bold text-slate-800 text-base break-words min-w-[200px]">
+                                                                <td className="px-4 py-4 font-bold text-slate-800 text-base break-words min-w-[200px] flex items-center gap-2">
                                                                     {group.businessCategory && (
-                                                                        <span className={`mr-2 text-[10px] px-1.5 py-0.5 rounded border ${getCategoryStyle(group.businessCategory)}`}>
+                                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getCategoryStyle(group.businessCategory)}`}>
                                                                             [{group.businessCategory}]
                                                                         </span>
                                                                     )}
-                                                                    {group.activityName}
-                                                                    <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">{group.items.length} 筆明細</span>
+                                                                    <span className="flex-1">{group.activityName}</span>
+                                                                    <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">{group.items.length} 筆</span>
+                                                                    
+                                                                    {/* Group Edit Button */}
+                                                                    {group.status === '未核銷' && (
+                                                                        <button 
+                                                                            onClick={(e) => { e.stopPropagation(); handleStartGroupEdit(group); }} 
+                                                                            className="p-1 text-slate-300 hover:text-blue-500 rounded-full hover:bg-blue-50 transition-colors"
+                                                                        >
+                                                                            <Edit className="w-3 h-3" />
+                                                                        </button>
+                                                                    )}
                                                                 </td>
                                                                 <td className="px-4 py-4 text-right font-medium text-blue-900 whitespace-nowrap w-[1%]">{formatCurrency(group.subsidyAmount)}</td>
                                                                 <td className="px-4 py-4 text-right font-medium text-sky-600 whitespace-nowrap w-[1%]">{formatCurrency(group.matchingAmount)}</td>
@@ -1057,6 +1116,54 @@
                                                                     </div>
                                                                 </td>
                                                             </tr>
+                                                            
+                                                            {/* Group Edit Form */}
+                                                            {editingGroupKey === group.key && (
+                                                                <tr>
+                                                                    <td colSpan="8" className="bg-blue-50 p-4 border-b border-blue-200">
+                                                                        <div className="flex flex-wrap gap-4 items-center">
+                                                                            <div className="flex gap-2 items-center">
+                                                                                <span className="text-xs font-bold text-blue-800">修改活動資訊:</span>
+                                                                                <select 
+                                                                                    value={editGroupData.month} 
+                                                                                    onChange={e => setEditGroupData({...editGroupData, month: e.target.value})}
+                                                                                    className="text-sm rounded border border-blue-300 px-2 py-1"
+                                                                                >
+                                                                                    {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                                </select>
+                                                                                <select 
+                                                                                    value={editGroupData.businessCategory} 
+                                                                                    onChange={e => setEditGroupData({...editGroupData, businessCategory: e.target.value})}
+                                                                                    className="text-sm rounded border border-blue-300 px-2 py-1"
+                                                                                >
+                                                                                    {BUSINESS_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                                                                </select>
+                                                                                <input 
+                                                                                    type="text" 
+                                                                                    value={editGroupData.activityName} 
+                                                                                    onChange={e => setEditGroupData({...editGroupData, activityName: e.target.value})}
+                                                                                    className="text-sm rounded border border-blue-300 px-2 py-1 w-64"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="flex gap-2 ml-auto">
+                                                                                <button 
+                                                                                    onClick={() => handleSaveGroupEdit(group.items)}
+                                                                                    className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                                                                                >
+                                                                                    儲存修改
+                                                                                </button>
+                                                                                <button 
+                                                                                    onClick={handleCancelGroupEdit}
+                                                                                    className="px-3 py-1 bg-white text-slate-600 border border-slate-300 rounded text-sm hover:bg-slate-50"
+                                                                                >
+                                                                                    取消
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+
                                                             {expandedGroups[group.key] && (
                                                                 <tr>
                                                                     <td colSpan="8" className="bg-slate-50 p-4 border-b border-slate-200 shadow-inner">
