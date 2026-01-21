@@ -49,14 +49,13 @@
         } from 'https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0';
 
         // --- 設定區 ---
-        // 您的 GAS 後端網址 (已確認為最新版)
         const API_URL = 'https://script.google.com/macros/s/AKfycbwCT-oLJM6dILv0Lt5J8mH4PhuQ8dyEBvM0VlUpQQqKZek2y4A5arax52eoFsIIQ9gg/exec'; 
 
         // --- 常數定義 ---
         const EXPENSE_TYPES = ['鐘點費', '諮詢費', '出席費', '補充保費', '餐點費', '材料費', '交通費', '保險費', '雜支', '差旅費', '教材費'];
         const EXPENSE_SORT_ORDER = { '鐘點費': 1, '諮詢費': 2, '出席費': 3, '補充保費': 4, '餐點費': 5, '材料費': 6, '交通費': 7, '保險費': 8, '雜支': 9, '差旅費': 10 };
         const PAYEE_CATEGORIES = ['業師', '個人', '廠商', '勞健保'];
-        const BUSINESS_CATEGORIES = ['會報', '活動', '出差', '採購']; // 新增業務類別
+        const BUSINESS_CATEGORIES = ['會報', '活動', '出差', '採購']; 
         const YEARS = [2024, 2025, 2026];
         const MONTHS = ['1月份','2月份','3月份','4月份','5月份','6月份','7月份','8月份','9月份','10月份','11月份','12月份'];
         const PREMIUM_RATE = 0.0211;
@@ -67,7 +66,7 @@
             // 安全性與登入狀態
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [inputCode, setInputCode] = useState('');
-            const [authKey, setAuthKey] = useState(''); // 修正：需要儲存真正的金鑰
+            const [authKey, setAuthKey] = useState('');
             const [isVerifying, setIsVerifying] = useState(false);
 
             const [activeTab, setActiveTab] = useState('dashboard');
@@ -102,7 +101,6 @@
                 { id: 6, name: '職涯-雜支(配)', type: 'matching', description: '學校配合款' },
             ]);
 
-            // 預設業務類別為 '會報'
             const [batchHeader, setBatchHeader] = useState({ 
                 id: '', 
                 year: currentYear, 
@@ -186,7 +184,6 @@
                 }
             };
 
-            // --- 登入/登出 ---
             const handleLogin = async (e) => {
                 e.preventDefault();
                 if (!inputCode) {
@@ -215,7 +212,6 @@
                 localStorage.removeItem('expense_app_key');
             };
 
-            // --- Effect Hooks ---
             useEffect(() => {
                 const savedKey = localStorage.getItem('expense_app_key');
                 if (savedKey) {
@@ -246,7 +242,6 @@
                 return transactions.filter(t => t.year === currentYear);
             }, [transactions, currentYear]);
 
-            // 查詢邏輯
             useEffect(() => {
                 if (activeTab === 'query' && searchQuery) {
                     const results = currentYearTransactions.filter(t => t.payeeName === searchQuery.trim());
@@ -299,7 +294,6 @@
             const groupedTransactions = useMemo(() => {
                 const groups = {};
                 currentYearTransactions.forEach(t => {
-                    // Group key 增加 businessCategory
                     const groupKey = `${t.month}-${t.id || 'pending'}-${t.activityName}-${t.businessCategory}`;
                     if (!groups[groupKey]) {
                         groups[groupKey] = {
@@ -341,8 +335,6 @@
                 });
                 return result;
             }, [currentYearTransactions, projects]);
-
-            // --- Handler ---
 
             const handleBudgetUpdate = async (projectId, amount) => {
                 const numAmount = Number(amount);
@@ -404,7 +396,7 @@
                     year: Number(batchHeader.year), 
                     month: batchHeader.month,
                     activityName: batchHeader.activityName, 
-                    businessCategory: batchHeader.businessCategory, // 傳送業務類別
+                    businessCategory: batchHeader.businessCategory, 
                     project: item.project, 
                     expenseType: item.expenseType, 
                     item: item.item,
@@ -423,7 +415,6 @@
                 if (success) {
                     await fetchAllData(authKey); 
                     showNotification('新增成功', 'success');
-                    // 重置時保留部分設定
                     setBatchHeader(prev => ({...prev, id: '', activityName: '', archiveDate: ''}));
                     setBatchItems([{ id: Date.now(), project: projects[0].name, expenseType: '諮詢費', item: '', payeeCategory: '業師', payeeName: '', unitPrice: '', quantity: 1 }]);
                 } else {
@@ -523,7 +514,6 @@
             const formatCurrency = (n) => new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 }).format(n);
             const batchTotal = batchItems.reduce((sum, i) => sum + (Math.round(Number(i.unitPrice)*Number(i.quantity)) || 0), 0);
 
-            // --- Render ---
             if (!isAuthenticated) {
                 return (
                     <div className="min-h-screen bg-slate-100 flex items-center justify-center font-sans">
@@ -554,7 +544,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.3.0 | 更新時間：2026/01/21 11:45</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.1.8 | 更新時間：2026/01/21 12:00</p>
                             </div>
                         </div>
                     </div>
@@ -563,7 +553,6 @@
 
             return (
                 <div className="min-h-screen bg-slate-50 text-slate-800 font-sans relative">
-                    {/* 遮罩 */}
                     {(isLoading || isSaving) && (
                         <div className="fixed inset-0 bg-white/60 z-50 flex items-center justify-center backdrop-blur-sm">
                             <div className="flex flex-col items-center p-6 bg-white rounded-xl shadow-xl border border-slate-100">
@@ -573,7 +562,6 @@
                         </div>
                     )}
 
-                    {/* Modal (刪除/狀態) */}
                     {modalConfig.isOpen && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center animate-fade-in">
                             <div className="bg-white rounded-xl shadow-2xl p-6 w-96 animate-fade-in-down">
@@ -677,7 +665,6 @@
                             </div>
                         ) : (
                             <>
-                                {/* Settings Tab */}
                                 {activeTab === 'settings' && (
                                     <div className="max-w-3xl mx-auto animate-fade-in">
                                         <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
@@ -715,7 +702,6 @@
                                     </div>
                                 )}
 
-                                {/* Dashboard Tab */}
                                 {activeTab === 'dashboard' && (
                                     <div className="space-y-6 animate-fade-in">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -910,13 +896,13 @@
                                                 <thead className="text-xs text-slate-500 uppercase bg-slate-100 border-b border-slate-200">
                                                     <tr>
                                                         <th className="px-4 py-3 w-10"></th>
-                                                        <th className="px-4 py-3">狀態</th>
-                                                        <th className="px-4 py-3">歸屬月份</th>
-                                                        <th className="px-4 py-3">活動名稱</th>
-                                                        <th className="px-4 py-3 text-right text-blue-900">補助款</th> 
-                                                        <th className="px-4 py-3 text-right text-sky-600">配合款</th> 
-                                                        <th className="px-4 py-3 text-right">總金額</th>
-                                                        <th className="px-4 py-3 w-[120px] text-right">操作</th>
+                                                        <th className="px-4 py-3 whitespace-nowrap">狀態</th>
+                                                        <th className="px-4 py-3 whitespace-nowrap">歸屬月份</th>
+                                                        <th className="px-4 py-3 min-w-[200px]">活動名稱</th>
+                                                        <th className="px-4 py-3 text-right text-blue-900 whitespace-nowrap">補助款</th> 
+                                                        <th className="px-4 py-3 text-right text-sky-600 whitespace-nowrap">配合款</th> 
+                                                        <th className="px-4 py-3 text-right whitespace-nowrap">總金額</th>
+                                                        <th className="px-4 py-3 w-[120px] text-right whitespace-nowrap">操作</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100">
@@ -924,22 +910,22 @@
                                                         <React.Fragment key={group.key}>
                                                             <tr className="hover:bg-blue-50 transition-colors cursor-pointer group border-l-4 border-l-transparent hover:border-l-blue-500" onClick={() => toggleGroup(group.key)}>
                                                                 <td className="px-4 py-4 text-slate-400">{expandedGroups[group.key] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</td>
-                                                                <td className="px-4 py-4 text-center">
+                                                                <td className="px-4 py-4 text-center whitespace-nowrap w-[1%]">
                                                                     <div className="flex flex-col items-center gap-1">
                                                                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${group.status === '已歸檔' ? 'bg-green-50 text-green-700 border-green-200' : group.status === '送核銷' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{group.status}</span>
                                                                         {group.id && <span className="text-[10px] text-slate-400 font-mono tracking-tighter">{group.id}</span>}
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-4 py-4 text-slate-600 font-medium">{group.month}</td>
-                                                                <td className="px-4 py-4 font-bold text-slate-800 text-base">
+                                                                <td className="px-4 py-4 text-slate-600 font-medium whitespace-nowrap w-[1%]">{group.month}</td>
+                                                                <td className="px-4 py-4 font-bold text-slate-800 text-base break-words min-w-[200px]">
                                                                     {group.businessCategory && <span className="mr-2 text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600">[{group.businessCategory}]</span>}
                                                                     {group.activityName}
-                                                                    <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{group.items.length} 筆明細</span>
+                                                                    <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">{group.items.length} 筆明細</span>
                                                                 </td>
-                                                                <td className="px-4 py-4 text-right font-medium text-blue-900">{formatCurrency(group.subsidyAmount)}</td>
-                                                                <td className="px-4 py-4 text-right font-medium text-sky-600">{formatCurrency(group.matchingAmount)}</td>
-                                                                <td className="px-4 py-4 text-right font-bold text-slate-800">{formatCurrency(group.totalAmount)}</td>
-                                                                <td className="px-4 py-4 w-[120px] text-right">
+                                                                <td className="px-4 py-4 text-right font-medium text-blue-900 whitespace-nowrap w-[1%]">{formatCurrency(group.subsidyAmount)}</td>
+                                                                <td className="px-4 py-4 text-right font-medium text-sky-600 whitespace-nowrap w-[1%]">{formatCurrency(group.matchingAmount)}</td>
+                                                                <td className="px-4 py-4 text-right font-bold text-slate-800 whitespace-nowrap w-[1%]">{formatCurrency(group.totalAmount)}</td>
+                                                                <td className="px-4 py-4 w-[120px] text-right whitespace-nowrap">
                                                                     <div className="flex justify-end gap-1 items-center">
                                                                         {group.status === '未核銷' && (
                                                                             <button onClick={(e) => handleOpenStatusModal(e, 'promote_to_submitted', group.items)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition-colors" title="送出核銷"><ArrowRightCircle className="w-4 h-4" /></button>
@@ -965,13 +951,13 @@
                                                                             <table className="w-full text-xs">
                                                                                 <thead className="bg-slate-100 text-slate-500 uppercase">
                                                                                     <tr>
-                                                                                        <th className="px-4 py-2 text-left w-[14%]">經費來源</th>
-                                                                                        <th className="px-4 py-2 text-left w-[10%]">支出項目</th>
-                                                                                        <th className="px-4 py-2 text-left w-[33%]">補充說明</th>
-                                                                                        <th className="px-4 py-2 text-left w-[15%]">對象</th>
-                                                                                        <th className="px-4 py-2 text-right w-[10%]">單價</th>
-                                                                                        <th className="px-4 py-2 text-center w-[8%]">數量</th>
-                                                                                        <th className="px-4 py-2 text-right w-[10%]">總價</th>
+                                                                                        <th className="px-4 py-2 text-left w-[14%] whitespace-nowrap">經費來源</th>
+                                                                                        <th className="px-4 py-2 text-left w-[10%] whitespace-nowrap">支出項目</th>
+                                                                                        <th className="px-4 py-2 text-left w-[33%] min-w-[200px]">補充說明</th>
+                                                                                        <th className="px-4 py-2 text-left w-[15%] whitespace-nowrap">對象</th>
+                                                                                        <th className="px-4 py-2 text-right w-[10%] whitespace-nowrap">單價</th>
+                                                                                        <th className="px-4 py-2 text-center w-[8%] whitespace-nowrap">數量</th>
+                                                                                        <th className="px-4 py-2 text-right w-[10%] whitespace-nowrap">總價</th>
                                                                                         <th className="px-4 py-2 w-[30px]"></th>
                                                                                     </tr>
                                                                                 </thead>
@@ -991,13 +977,13 @@
                                                                                                 </>
                                                                                             ) : (
                                                                                                 <>
-                                                                                                    <td className="px-4 py-2 font-medium text-slate-700">{item.project}</td>
-                                                                                                    <td className="px-4 py-2 text-blue-600">{item.expenseType}</td>
-                                                                                                    <td className="px-4 py-2 text-slate-600">{item.item}</td>
-                                                                                                    <td className="px-4 py-2 text-slate-600"><span className="text-[10px] bg-slate-100 px-1 rounded mr-1">{item.payeeCategory}</span>{item.payeeName}</td>
-                                                                                                    <td className="px-4 py-2 text-right text-slate-500">{formatCurrency(item.unitPrice)}</td>
-                                                                                                    <td className="px-4 py-2 text-center text-slate-500">{item.quantity}</td>
-                                                                                                    <td className="px-4 py-2 text-right font-bold text-slate-800">{formatCurrency(item.amount)}</td>
+                                                                                                    <td className="px-4 py-2 font-medium text-slate-700 whitespace-nowrap">{item.project}</td>
+                                                                                                    <td className="px-4 py-2 text-blue-600 whitespace-nowrap">{item.expenseType}</td>
+                                                                                                    <td className="px-4 py-2 text-slate-600 break-words">{item.item}</td>
+                                                                                                    <td className="px-4 py-2 text-slate-600 whitespace-nowrap"><span className="text-[10px] bg-slate-100 px-1 rounded mr-1">{item.payeeCategory}</span>{item.payeeName}</td>
+                                                                                                    <td className="px-4 py-2 text-right text-slate-500 whitespace-nowrap">{formatCurrency(item.unitPrice)}</td>
+                                                                                                    <td className="px-4 py-2 text-center text-slate-500 whitespace-nowrap">{item.quantity}</td>
+                                                                                                    <td className="px-4 py-2 text-right font-bold text-slate-800 whitespace-nowrap">{formatCurrency(item.amount)}</td>
                                                                                                     <td className="px-2 py-2 text-center">
                                                                                                         {group.status === '未核銷' ? (
                                                                                                             <button onClick={() => handleStartEdit(item)} className="text-slate-300 hover:text-blue-500 p-1 rounded transition-colors"><Pencil className="w-3 h-3" /></button>
@@ -1061,19 +1047,19 @@
                                                             <table className="w-full text-sm text-left">
                                                                 <thead className="bg-slate-100 text-slate-500">
                                                                     <tr>
-                                                                        <th className="px-4 py-3">月份</th>
+                                                                        <th className="px-4 py-3 whitespace-nowrap">月份</th>
                                                                         <th className="px-4 py-3">活動名稱</th>
-                                                                        <th className="px-4 py-3 text-right">金額</th>
-                                                                        <th className="px-4 py-3 text-center">狀態</th>
+                                                                        <th className="px-4 py-3 text-right whitespace-nowrap">金額</th>
+                                                                        <th className="px-4 py-3 text-center whitespace-nowrap">狀態</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody className="divide-y divide-slate-100">
                                                                     {searchResult.items.map((item, idx) => (
                                                                         <tr key={idx} className="hover:bg-slate-50">
-                                                                            <td className="px-4 py-3 text-slate-600">{item.month}</td>
+                                                                            <td className="px-4 py-3 text-slate-600 whitespace-nowrap w-[1%]">{item.month}</td>
                                                                             <td className="px-4 py-3 font-medium text-slate-800">{item.activityName}</td>
-                                                                            <td className="px-4 py-3 text-right font-bold text-slate-700">{formatCurrency(item.amount)}</td>
-                                                                            <td className="px-4 py-3 text-center">
+                                                                            <td className="px-4 py-3 text-right font-bold text-slate-700 whitespace-nowrap w-[1%]">{formatCurrency(item.amount)}</td>
+                                                                            <td className="px-4 py-3 text-center whitespace-nowrap w-[1%]">
                                                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${item.status === '已歸檔' ? 'bg-green-50 text-green-700 border-green-200' : item.status === '送核銷' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{item.status}</span>
                                                                             </td>
                                                                         </tr>
