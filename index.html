@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>致理資教職輔計畫經費控管系統</title>
+    <title>資源教室職輔計畫經費控管系統</title>
     <!-- 1. 載入樣式工具 (Tailwind) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -45,11 +45,20 @@
             PlusCircle, Wallet, FileText, AlertCircle, Save, X, Table, Trash2, Plus, 
             CheckCircle2, Calendar, ClipboardList, Coins, ChevronDown, 
             ChevronRight, Settings, Shuffle, Pencil, Check, Loader2, ArrowRightCircle, 
-            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Filter, ListFilter, Edit, BarChart2, Users, Building2, GraduationCap
+            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Filter, ListFilter, Edit, BarChart2, Users, Building2, GraduationCap, School
         } from 'https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0';
 
-        // --- 設定區 ---
-        const API_URL = 'https://script.google.com/macros/s/AKfycbwCT-oLJM6dILv0Lt5J8mH4PhuQ8dyEBvM0VlUpQQqKZek2y4A5arax52eoFsIIQ9gg/exec'; 
+        // --- 設定區 (多校設定) ---
+        const SCHOOL_CONFIG = {
+            'chihlee': {
+                name: '致理科技大學',
+                url: 'https://script.google.com/macros/s/AKfycbwCT-oLJM6dILv0Lt5J8mH4PhuQ8dyEBvM0VlUpQQqKZek2y4A5arax52eoFsIIQ9gg/exec'
+            },
+            'fju': {
+                name: '輔仁大學',
+                url: 'https://script.google.com/macros/s/AKfycbxwLIcqmfvInG9SzsqrRHWChBJJIrKrHDEtXLCNGuc937xDaOUlgagT3ZMMTNP_-2pC9Q/exec'
+            }
+        };
 
         // --- 常數定義 ---
         const EXPENSE_TYPES = ['鐘點費', '諮詢費', '出席費', '補充保費', '餐點費', '材料費', '交通費', '保險費', '雜支', '差旅費', '教材費'];
@@ -60,7 +69,6 @@
         // ★★★ 動態年份生成 (2024 ~ 當下年份+1) ★★★
         const START_YEAR = 2024;
         const currentSystemYear = new Date().getFullYear();
-        // 如果現在是2027年，這裡就會生成 [2024, 2025, 2026, 2027, 2028]
         const YEARS = Array.from({ length: (currentSystemYear + 1) - START_YEAR + 1 }, (_, i) => START_YEAR + i);
 
         const MONTHS = ['1月份','2月份','3月份','4月份','5月份','6月份','7月份','8月份','9月份','10月份','11月份','12月份'];
@@ -100,6 +108,7 @@
         function ExpenseTrackerApp() {
             // 安全性與登入狀態
             const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [selectedSchool, setSelectedSchool] = useState(''); 
             const [inputCode, setInputCode] = useState('');
             const [authKey, setAuthKey] = useState(''); 
             const [isVerifying, setIsVerifying] = useState(false);
@@ -157,13 +166,22 @@
             const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', items: [], inputValue: '' });
 
             // --- API 連線邏輯 ---
-            const fetchAllData = useCallback(async (key) => {
-                if (!API_URL) return false;
+            const getApiUrl = () => {
+                if (!selectedSchool || !SCHOOL_CONFIG[selectedSchool]) return '';
+                return SCHOOL_CONFIG[selectedSchool].url;
+            };
+
+            const fetchAllData = useCallback(async (key, school) => {
+                const targetSchool = school || selectedSchool;
+                if (!targetSchool || !SCHOOL_CONFIG[targetSchool]) return false;
+                
+                const apiUrl = SCHOOL_CONFIG[targetSchool].url;
+
                 setIsLoading(true);
                 try {
                     const [transRes, budgetRes] = await Promise.all([
-                        fetch(`${API_URL}?type=transactions&authCode=${key}`),
-                        fetch(`${API_URL}?type=budgets&authCode=${key}`)
+                        fetch(`${apiUrl}?type=transactions&authCode=${key}`),
+                        fetch(`${apiUrl}?type=budgets&authCode=${key}`)
                     ]);
                     
                     const transResponse = await transRes.json();
@@ -202,7 +220,7 @@
                         if (isAuthenticated) {
                              showNotification('密碼驗證失敗，請重新登入', 'error');
                         }
-                        handleLogout(); // 確保清除錯誤的 storage
+                        handleLogout(); 
                     } else {
                         console.error('Fetch Error:', error);
                         if (isAuthenticated) {
@@ -213,11 +231,14 @@
                 } finally {
                     setIsLoading(false);
                 }
-            }, [isAuthenticated]);
+            }, [isAuthenticated, selectedSchool]);
 
             const postToGAS = async (action, data) => {
+                const apiUrl = getApiUrl();
+                if (!apiUrl) return false;
+
                 try {
-                    const response = await fetch(API_URL, {
+                    const response = await fetch(apiUrl, {
                         method: 'POST',
                         body: JSON.stringify({ action, data, authCode: authKey }),
                     });
@@ -233,16 +254,26 @@
                 }
             };
 
+            const handleSchoolSelect = (schoolKey) => {
+                setSelectedSchool(schoolKey);
+                localStorage.setItem('expense_app_school', schoolKey);
+            };
+
             const handleLogin = async (e) => {
                 e.preventDefault();
                 if (!inputCode) {
                     alert('請輸入通行密碼');
                     return;
                 }
+                if (!selectedSchool) {
+                    alert('請先選擇學校');
+                    return;
+                }
+
                 setIsVerifying(true);
                 
                 try {
-                    const success = await fetchAllData(inputCode);
+                    const success = await fetchAllData(inputCode, selectedSchool);
                     if (success) {
                         setIsAuthenticated(true);
                         setAuthKey(inputCode); 
@@ -267,18 +298,24 @@
             };
 
             useEffect(() => {
+                const savedSchool = localStorage.getItem('expense_app_school');
                 const savedKey = localStorage.getItem('expense_app_key');
-                if (savedKey) {
-                    setIsVerifying(true);
-                    fetchAllData(savedKey).then(success => {
-                        if (success) {
-                            setAuthKey(savedKey);
-                            setIsAuthenticated(true);
-                        } else {
-                            localStorage.removeItem('expense_app_key');
-                        }
-                        setIsVerifying(false);
-                    });
+
+                if (savedSchool && SCHOOL_CONFIG[savedSchool]) {
+                    setSelectedSchool(savedSchool);
+                    
+                    if (savedKey) {
+                        setIsVerifying(true);
+                        fetchAllData(savedKey, savedSchool).then(success => {
+                            if (success) {
+                                setAuthKey(savedKey);
+                                setIsAuthenticated(true);
+                            } else {
+                                localStorage.removeItem('expense_app_key');
+                            }
+                            setIsVerifying(false);
+                        });
+                    }
                 }
             }, []); 
 
@@ -373,7 +410,7 @@
                 return { rows, colTotals, grandTotal };
             }, [currentYearTransactions, projects]);
 
-            // 統計計算邏輯
+            // ⚡ 統計計算邏輯 (高效單次掃描版)
             const projectStats = useMemo(() => {
                 const statsMap = {};
                 projects.forEach(p => {
@@ -787,31 +824,58 @@
                         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm animate-fade-in-down border border-slate-200">
                             <div className="flex flex-col items-center mb-6">
                                 <div className="bg-blue-600 p-3 rounded-xl mb-3 shadow-lg shadow-blue-200"><Wallet className="h-8 w-8 text-white" /></div>
-                                <h2 className="text-xl font-bold text-slate-800">致理資教職輔計畫經費控管系統</h2>
-                                <p className="text-sm text-slate-500">經費控管系統 (Secure)</p>
+                                <h2 className="text-xl font-bold text-slate-800">資源教室職輔計畫經費控管系統</h2>
+                                <p className="text-sm text-slate-500">Multi-School Edition</p>
                             </div>
                             <form onSubmit={handleLogin} className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-500 mb-1 ml-1">通行密碼</label>
-                                    <div className="relative">
-                                        <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                                        <input 
-                                            type="password" 
-                                            value={inputCode} 
-                                            onChange={(e) => setInputCode(e.target.value)} 
-                                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                                            placeholder="請輸入密碼"
-                                            autoFocus
-                                        />
+                                {/* School Selector */}
+                                {!selectedSchool ? (
+                                    <div className="space-y-3">
+                                        <label className="block text-sm font-medium text-slate-600">請選擇學校單位</label>
+                                        {Object.entries(SCHOOL_CONFIG).map(([key, config]) => (
+                                            <button 
+                                                key={key} 
+                                                type="button" 
+                                                onClick={() => handleSchoolSelect(key)}
+                                                className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all group"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="bg-slate-100 p-2 rounded-lg group-hover:bg-white"><School className="w-5 h-5 text-slate-500 group-hover:text-blue-600" /></div>
+                                                    <span className="font-bold text-slate-700">{config.name}</span>
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-500" />
+                                            </button>
+                                        ))}
                                     </div>
-                                </div>
-                                <button type="submit" disabled={isVerifying} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-bold py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all transform active:scale-95 flex justify-center items-center gap-2">
-                                    {isVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : '進入系統'}
-                                </button>
+                                ) : (
+                                    <div className="animate-fade-in">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{SCHOOL_CONFIG[selectedSchool].name}</span>
+                                            <button type="button" onClick={() => { setSelectedSchool(''); localStorage.removeItem('expense_app_school'); }} className="text-xs text-slate-400 hover:text-red-500">切換學校</button>
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block text-xs font-medium text-slate-500 mb-1 ml-1">通行密碼</label>
+                                            <div className="relative">
+                                                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                                                <input 
+                                                    type="password" 
+                                                    value={inputCode} 
+                                                    onChange={(e) => setInputCode(e.target.value)} 
+                                                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                                    placeholder="請輸入密碼"
+                                                    autoFocus
+                                                />
+                                            </div>
+                                        </div>
+                                        <button type="submit" disabled={isVerifying} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-bold py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all transform active:scale-95 flex justify-center items-center gap-2">
+                                            {isVerifying ? <Loader2 className="w-5 h-5 animate-spin" /> : '進入系統'}
+                                        </button>
+                                    </div>
+                                )}
                             </form>
                             <div className="text-center mt-6">
-                                <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.6.5 | 更新時間：2026/01/22 11:35</p>
+                                <p className="text-xs text-slate-400">開發人員：梁楒侑</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.7.0 | 更新時間：2026/01/22 13:26</p>
                             </div>
                         </div>
                     </div>
@@ -820,7 +884,7 @@
 
             return (
                 <div className="min-h-screen bg-slate-50 text-slate-800 font-sans relative">
-                    {/* 遮罩 */}
+                    {/* ... (遮罩與 Modal 省略，保持不變) ... */}
                     {(isLoading || isSaving) && (
                         <div className="fixed inset-0 bg-white/60 z-50 flex items-center justify-center backdrop-blur-sm">
                             <div className="flex flex-col items-center p-6 bg-white rounded-xl shadow-xl border border-slate-100">
@@ -833,6 +897,7 @@
                     {modalConfig.isOpen && (
                         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center animate-fade-in">
                             <div className="bg-white rounded-xl shadow-2xl p-6 w-96 animate-fade-in-down">
+                                {/* ... Modal Content (Same as previous) ... */}
                                 <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
                                     <h3 className="font-bold text-lg text-slate-700">
                                         {modalConfig.type === 'promote_to_submitted' && '送出核銷'}
@@ -874,21 +939,23 @@
                         </div>
                     )}
 
-                    <div className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-30">
+                    <div className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="flex justify-between items-center h-16">
                                 <div className="flex items-center gap-2">
                                     <div className="bg-blue-600 p-2 rounded-lg"><Wallet className="h-6 w-6 text-white" /></div>
-                                    <span className="font-bold text-xl text-slate-800 tracking-tight">致理資教職輔計畫經費控管系統</span>
+                                    <span className="font-bold text-xl text-slate-800 tracking-tight">
+                                        {SCHOOL_CONFIG[selectedSchool]?.name || '資源教室職輔計畫經費控管系統'}
+                                    </span>
                                 </div>
                                 <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg">
                                     {['dashboard', 'entry', 'log', 'report', 'query', 'settings'].map(tab => (
                                         <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-1 ${activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                                            {tab === 'dashboard' && '經費執行情形'}
-                                            {tab === 'entry' && '支出登錄'}
-                                            {tab === 'log' && '明細紀錄'}
-                                            {tab === 'report' && '經費支出一覽表'}
-                                            {tab === 'query' && '查詢統計'}
+                                            {tab === 'dashboard' && '執行總覽'}
+                                            {tab === 'entry' && '核銷登錄'}
+                                            {tab === 'log' && '核銷明細'}
+                                            {tab === 'report' && '經費核銷計算'}
+                                            {tab === 'query' && '人員查詢'}
                                             {tab === 'settings' && <><Settings className="w-4 h-4" /> 預算設定</>}
                                         </button>
                                     ))}
@@ -904,15 +971,16 @@
                                 {notification.type === 'success' ? <Save className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />} <span className="font-medium">{notification.msg}</span>
                             </div>
                         )}
-
+                        {/* ... (The rest of the main content: Dashboard, Entry, Log, Report, Query, Settings - same as v2.6.5) ... */}
+                        
                         <div className="mb-6 flex justify-between items-center">
                             <div className="flex items-center gap-3">
                                 <h2 className="text-xl font-bold text-slate-700">
-                                    {activeTab === 'dashboard' && '經費執行情形'}
-                                    {activeTab === 'entry' && '支出登錄'}
-                                    {activeTab === 'log' && '明細紀錄'}
-                                    {activeTab === 'report' && '經費支出一覽表'}
-                                    {activeTab === 'query' && '查詢統計'}
+                                    {activeTab === 'dashboard' && '執行總覽'}
+                                    {activeTab === 'entry' && '核銷登錄'}
+                                    {activeTab === 'log' && '核銷明細'}
+                                    {activeTab === 'report' && '經費核銷計算'}
+                                    {activeTab === 'query' && '人員查詢'}
                                     {activeTab === 'settings' && '系統設定'}
                                 </h2>
                                 {!dataLoaded && <span className="text-xs text-red-500 bg-red-50 px-2 py-1 rounded-full border border-red-100 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> 尚未連線至資料庫</span>}
@@ -1027,6 +1095,7 @@
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px]">支出總計</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px] font-bold">剩餘金額</th>
                                                             <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">執行率</th>
+                                                            <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">流用狀態</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 bg-green-50 text-green-800 min-w-[90px]">已歸檔</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 bg-yellow-50 text-yellow-800 min-w-[90px]">送核銷</th>
                                                             <th className="px-4 py-3 text-right bg-red-50 text-red-800 min-w-[90px]">未核銷</th>
@@ -1044,6 +1113,9 @@
                                                                         <span>{proj.ratio}%</span>
                                                                         {proj.isOverLimit && <span className="text-[10px] text-red-500">(超支)</span>}
                                                                     </div>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-center border-r border-slate-200">
+                                                                    {proj.isOverLimit ? <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 超支違規</span> : proj.isFlowing ? <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 流用中</span> : <span className="text-xs text-slate-400">-</span>}
                                                                 </td>
                                                                 <td className="px-4 py-3 text-right text-green-700 border-r border-slate-200 bg-green-50/30">{proj.archived > 0 ? formatCurrency(proj.archived) : '-'}</td>
                                                                 <td className="px-4 py-3 text-right text-yellow-700 border-r border-slate-200 bg-yellow-50/30">{proj.submitted > 0 ? formatCurrency(proj.submitted) : '-'}</td>
@@ -1252,7 +1324,7 @@
                                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                                             <div className="flex flex-col gap-2 w-full">
                                                 <div className="flex justify-between items-center">
-                                                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><FileText className="h-5 w-5 text-slate-500" /> 明細紀錄 ({currentYear}年)</h3>
+                                                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><FileText className="h-5 w-5 text-slate-500" /> 核銷明細 ({currentYear}年)</h3>
                                                     <span className="text-xs font-mono text-slate-400">Total Activities: {groupedTransactions.length}</span>
                                                 </div>
                                                 
@@ -1474,7 +1546,7 @@
                                     <div className="max-w-7xl mx-auto py-6 px-4 animate-fade-in">
                                         <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
                                             <div className="bg-blue-600 px-6 py-4 text-white">
-                                                <h3 className="font-bold text-lg flex items-center gap-2"><BarChart2 className="h-5 w-5" /> 經費支出一覽表</h3>
+                                                <h3 className="font-bold text-lg flex items-center gap-2"><BarChart2 className="h-5 w-5" /> 經費核銷計算</h3>
                                             </div>
                                             <div className="overflow-x-auto">
                                                 <table className="w-full text-sm border-collapse">
@@ -1545,7 +1617,7 @@
                                     <div className="max-w-3xl mx-auto animate-fade-in">
                                         <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
                                             <div className="bg-blue-600 px-6 py-4 text-white">
-                                                <h3 className="font-bold text-lg flex items-center gap-2"><Search className="h-5 w-5" /> 查詢統計</h3>
+                                                <h3 className="font-bold text-lg flex items-center gap-2"><Search className="h-5 w-5" /> 人員查詢</h3>
                                             </div>
                                             <div className="p-6">
                                                 
