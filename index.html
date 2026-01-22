@@ -45,7 +45,7 @@
             PlusCircle, Wallet, FileText, AlertCircle, Save, X, Table, Trash2, Plus, 
             CheckCircle2, Calendar, Hash, ClipboardList, Coins, Archive, ChevronDown, 
             ChevronRight, Settings, Shuffle, Pencil, Check, Loader2, ArrowRightCircle, 
-            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Tag, Filter, ListFilter, Edit, BarChart2
+            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Tag, Filter, ListFilter, Edit, BarChart2, Users, Building2, GraduationCap
         } from 'https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0';
 
         // --- 設定區 ---
@@ -65,9 +65,7 @@
         // --- 樣式設定 ---
         const labelStyle = "block text-sm font-bold text-slate-700 mb-1";
         const inputStyle = "w-full rounded-lg border-2 border-blue-200 text-base py-2 px-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors bg-white";
-        // 表格內輸入框樣式
         const tableInputStyle = "w-full border-2 border-blue-100 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm transition-colors bg-white";
-        // 表格標題樣式 (修正圖層順序 z-20)
         const tableHeaderStyle = "px-3 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider bg-slate-100 border-b-2 border-slate-300 whitespace-nowrap sticky top-0 z-20 shadow-sm"; 
         const tableCellStyle = "px-1.5 py-2 border-b border-slate-100 align-top";
 
@@ -124,9 +122,12 @@
             // 編輯與新增狀態
             const [editingId, setEditingId] = useState(null);
             const [editFormData, setEditFormData] = useState({});
+            
+            // 群組編輯狀態
             const [editingGroupKey, setEditingGroupKey] = useState(null);
             const [editGroupData, setEditGroupData] = useState({});
 
+            // 專案設定
             const [projects] = useState([
                 { id: 1, name: '職涯-課程(補)', type: 'subsidy', description: '教育部補助' },
                 { id: 2, name: '職涯-課程(配)', type: 'matching', description: '學校配合款' },
@@ -291,13 +292,38 @@
                 }
             }, [searchQuery, currentYearTransactions, activeTab]);
 
-            // 矩陣報表計算
+            // 年度對象名錄計算 (新功能)
+            const payeeSummary = useMemo(() => {
+                const summary = { '業師': [], '個人': [], '廠商': [] };
+                const map = {}; 
+
+                currentYearTransactions.forEach(t => {
+                    const key = `${t.payeeCategory}-${t.payeeName}`;
+                    if (!map[key]) {
+                        map[key] = { category: t.payeeCategory, name: t.payeeName, count: 0, total: 0 };
+                    }
+                    map[key].count += 1;
+                    map[key].total += Number(t.amount);
+                });
+
+                Object.values(map).forEach(item => {
+                    if (summary[item.category]) {
+                        summary[item.category].push(item);
+                    }
+                });
+
+                // Sort by total amount desc
+                Object.keys(summary).forEach(cat => {
+                    summary[cat].sort((a, b) => b.total - a.total);
+                });
+
+                return summary;
+            }, [currentYearTransactions]);
+
             const matrixReport = useMemo(() => {
                 const rowMap = new Map();
-                
                 currentYearTransactions.forEach(t => {
                     const rowKey = `${t.month}-${t.businessCategory}-${t.activityName}`;
-                    
                     if (!rowMap.has(rowKey)) {
                         rowMap.set(rowKey, {
                             month: t.month,
@@ -307,24 +333,19 @@
                             projectAmounts: {} 
                         });
                     }
-                    
                     const row = rowMap.get(rowKey);
                     const amount = Number(t.amount);
-                    
                     row.projectAmounts[t.project] = (row.projectAmounts[t.project] || 0) + amount;
                     row.total += amount;
                 });
-
                 const rows = Array.from(rowMap.values()).sort((a, b) => {
                      const mA = parseInt((a.month || '').replace(/\D/g, '')) || 0;
                      const mB = parseInt((b.month || '').replace(/\D/g, '')) || 0;
                      return mA - mB;
                 });
-
                 const colTotals = {};
                 projects.forEach(p => colTotals[p.name] = 0);
                 let grandTotal = 0;
-
                 rows.forEach(r => {
                     projects.forEach(p => {
                         const val = r.projectAmounts[p.name] || 0;
@@ -332,26 +353,42 @@
                     });
                     grandTotal += r.total;
                 });
-
                 return { rows, colTotals, grandTotal };
             }, [currentYearTransactions, projects]);
 
-
+            // 統計計算邏輯
             const projectStats = useMemo(() => {
+                const statsMap = {};
+                projects.forEach(p => {
+                    statsMap[p.name] = { totalUsed: 0, archived: 0, submitted: 0, unsubmitted: 0 };
+                });
+
+                currentYearTransactions.forEach(t => {
+                    const projName = t.project;
+                    if (statsMap[projName]) {
+                        const amount = Number(t.amount);
+                        statsMap[projName].totalUsed += amount;
+                        if (t.status === '已歸檔') statsMap[projName].archived += amount;
+                        else if (t.status === '送核銷') statsMap[projName].submitted += amount;
+                        else if (t.status === '未核銷') statsMap[projName].unsubmitted += amount;
+                    }
+                });
+
                 return projects.map(proj => {
                     const budgetRecord = yearlyBudgets.find(b => Number(b.year) === currentYear && Number(b.projectId) === proj.id);
                     const yearBudget = budgetRecord ? Number(budgetRecord.amount) : 0;
-                    const projTrans = currentYearTransactions.filter(t => t.project === proj.name);
                     
-                    const archived = projTrans.filter(t => t.status === '已歸檔').reduce((sum, t) => sum + t.amount, 0);
-                    const submitted = projTrans.filter(t => t.status === '送核銷').reduce((sum, t) => sum + t.amount, 0);
-                    const unsubmitted = projTrans.filter(t => t.status === '未核銷').reduce((sum, t) => sum + t.amount, 0);
-                    const totalUsed = archived + submitted + unsubmitted;
-                    
+                    const stats = statsMap[proj.name];
+                    const totalUsed = stats.totalUsed;
                     const ratio = yearBudget > 0 ? ((totalUsed / yearBudget) * 100) : 0;
 
                     return {
-                        ...proj, totalBudget: yearBudget, archived, submitted, unsubmitted, totalUsed,
+                        ...proj, 
+                        totalBudget: yearBudget, 
+                        archived: stats.archived, 
+                        submitted: stats.submitted, 
+                        unsubmitted: stats.unsubmitted, 
+                        totalUsed,
                         remaining: yearBudget - totalUsed, 
                         ratio: ratio.toFixed(2), 
                         isOverLimit: totalUsed > yearBudget * 1.2
@@ -359,31 +396,72 @@
                 });
             }, [projects, currentYearTransactions, yearlyBudgets, currentYear]);
 
+            // 計算儀表板總計列
+            const dashboardTotals = useMemo(() => {
+                return projectStats.reduce((acc, curr) => ({
+                    totalBudget: acc.totalBudget + curr.totalBudget,
+                    totalUsed: acc.totalUsed + curr.totalUsed,
+                    remaining: acc.remaining + curr.remaining,
+                    archived: acc.archived + curr.archived,
+                    submitted: acc.submitted + curr.submitted,
+                    unsubmitted: acc.unsubmitted + curr.unsubmitted
+                }), { totalBudget: 0, totalUsed: 0, remaining: 0, archived: 0, submitted: 0, unsubmitted: 0 });
+            }, [projectStats]);
+
             const summaryStats = useMemo(() => {
-                let subsidy = { budget: 0, used: 0 };
-                let matching = { budget: 0, used: 0 };
+                let subsidy = { budget: 0, used: 0, archived: 0 };
+                let matching = { budget: 0, used: 0, archived: 0 };
+                
                 projectStats.forEach(stat => {
-                    if (stat.type === 'subsidy') { subsidy.budget += stat.totalBudget; subsidy.used += stat.totalUsed; }
-                    else { matching.budget += stat.totalBudget; matching.used += stat.totalUsed; }
+                    if (stat.type === 'subsidy') { 
+                        subsidy.budget += stat.totalBudget; 
+                        subsidy.used += stat.totalUsed; 
+                        subsidy.archived += stat.archived; 
+                    }
+                    else { 
+                        matching.budget += stat.totalBudget; 
+                        matching.used += stat.totalUsed;
+                        matching.archived += stat.archived;
+                    }
                 });
-                const calcRatio = (u, b) => b > 0 ? (u/b)*100 : 0;
+
+                const subsidyRemaining = subsidy.budget - subsidy.used;
+                const matchingRemaining = matching.budget - matching.used;
+
+                const subsidyDisplayUsed = subsidy.archived;
+                const subsidyDisplayRemaining = subsidy.budget - subsidyDisplayUsed;
+                const subsidyRatio = subsidy.budget > 0 ? (subsidyDisplayUsed / subsidy.budget) * 100 : 0;
+
+                const matchingDisplayUsed = matching.archived;
+                const matchingDisplayRemaining = matching.budget - matchingDisplayUsed;
+                const matchingRatio = matching.budget > 0 ? (matchingDisplayUsed / matching.budget) * 100 : 0;
+
                 return {
-                    subsidy: { ...subsidy, remaining: subsidy.budget - subsidy.used, ratio: calcRatio(subsidy.used, subsidy.budget) },
-                    matching: { ...matching, remaining: matching.budget - matching.used, ratio: calcRatio(matching.used, matching.budget) }
+                    subsidy: { 
+                        remaining: subsidyRemaining, 
+                        displayUsed: subsidyDisplayUsed,
+                        displayRemaining: subsidyDisplayRemaining,
+                        displayTotal: subsidy.budget,
+                        ratio: subsidyRatio
+                    },
+                    matching: { 
+                        remaining: matchingRemaining,
+                        displayUsed: matchingDisplayUsed,
+                        displayRemaining: matchingDisplayRemaining,
+                        displayTotal: matching.budget,
+                        ratio: matchingRatio
+                    }
                 };
             }, [projectStats]);
 
             const groupedTransactions = useMemo(() => {
                 const groups = {};
-                
-                // 多重篩選邏輯
                 const filteredTransactions = currentYearTransactions.filter(t => {
                     const matchCategory = filterCategory === '全部' || t.businessCategory === filterCategory;
                     const matchStatus = filterStatus === '全部' || t.status === filterStatus;
                     const matchMonth = filterMonth === '全部' || t.month === filterMonth;
                     return matchCategory && matchStatus && matchMonth;
                 });
-
                 filteredTransactions.forEach(t => {
                     const groupKey = `${t.month}-${t.id || 'pending'}-${t.activityName}-${t.businessCategory}`;
                     if (!groups[groupKey]) {
@@ -408,7 +486,6 @@
                         else groups[groupKey].matchingAmount += amount;
                     }
                 });
-
                 const getMonthNum = (m) => parseInt(m.replace('月份', '')) || 0;
                 const result = Object.values(groups).sort((a, b) => {
                     const monthDiff = getMonthNum(b.month) - getMonthNum(a.month); 
@@ -416,7 +493,6 @@
                     const STATUS_ORDER = { '未核銷': 0, '送核銷': 1, '已歸檔': 2 };
                     return (STATUS_ORDER[a.status] || 0) - (STATUS_ORDER[b.status] || 0);
                 });
-
                 result.forEach(group => {
                     group.items.sort((a, b) => {
                         const orderA = EXPENSE_SORT_ORDER[a.expenseType] || 999;
@@ -426,8 +502,6 @@
                 });
                 return result;
             }, [currentYearTransactions, projects, filterCategory, filterStatus, filterMonth]); 
-
-            // --- Handler ---
 
             const handleBudgetUpdate = async (projectId, amount) => {
                 const numAmount = Number(amount);
@@ -500,7 +574,6 @@
                     return; 
                 }
 
-                // --- 總量控管邏輯 ---
                 let batchSubsidyTotal = 0;
                 let batchMatchingTotal = 0;
 
@@ -671,6 +744,10 @@
                 }
             };
 
+            const handlePayeeClick = (name) => {
+                setSearchQuery(name);
+            };
+
             const toggleGroup = (key) => setExpandedGroups(prev => ({...prev, [key]: !prev[key]}));
             const showNotification = (msg, type) => { setNotification({ msg, type }); setTimeout(() => setNotification(null), 3000); };
             const formatCurrency = (n) => new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', minimumFractionDigits: 0 }).format(n);
@@ -706,7 +783,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.4.8 | 更新時間：2026/01/22 00:10</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.6.1 | 更新時間：2026/01/22 09:30</p>
                             </div>
                         </div>
                     </div>
@@ -769,7 +846,7 @@
                         </div>
                     )}
 
-                    <div className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-30">
+                    <div className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-10">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="flex justify-between items-center h-16">
                                 <div className="flex items-center gap-2">
@@ -870,23 +947,43 @@
                                 {activeTab === 'dashboard' && (
                                     <div className="space-y-6 animate-fade-in">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {/* 補助款卡片 */}
                                             <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-900 relative overflow-hidden">
                                                 <div className="flex justify-between items-center mb-4">
                                                     <h4 className="text-blue-900 font-bold">補助款</h4>
-                                                    <div className={`text-2xl font-bold ${summaryStats.subsidy.remaining < 0 ? 'text-red-600' : 'text-blue-900'}`}>{formatCurrency(summaryStats.subsidy.remaining)}<span className="text-sm text-slate-400 font-normal ml-1">剩餘</span></div>
+                                                    <div className={`text-2xl font-bold ${summaryStats.subsidy.displayRemaining < 0 ? 'text-red-600' : 'text-blue-900'}`}>
+                                                        {formatCurrency(summaryStats.subsidy.displayRemaining)}
+                                                        <span className="text-sm text-slate-400 font-normal ml-1">剩餘</span>
+                                                    </div>
                                                 </div>
-                                                <div className="w-full bg-slate-100 rounded-full h-2 mb-2"><div className={`h-2 rounded-full ${summaryStats.subsidy.ratio > 100 ? 'bg-red-500' : 'bg-blue-800'}`} style={{ width: `${Math.min(summaryStats.subsidy.ratio, 100)}%` }}></div></div>
-                                                <div className="flex justify-between text-sm text-slate-500"><span>已用: {formatCurrency(summaryStats.subsidy.used)}</span><span>總額: {formatCurrency(summaryStats.subsidy.budget)}</span></div>
+                                                <div className="w-full bg-slate-100 rounded-full h-2 mb-2">
+                                                    <div className={`h-2 rounded-full ${summaryStats.subsidy.ratio > 100 ? 'bg-red-500' : 'bg-blue-800'}`} style={{ width: `${Math.min(summaryStats.subsidy.ratio, 100)}%` }}></div>
+                                                </div>
+                                                <div className="flex justify-between text-sm text-slate-500">
+                                                    <span>已用(已歸檔): {formatCurrency(summaryStats.subsidy.displayUsed)}</span>
+                                                    <span>總額: {formatCurrency(summaryStats.subsidy.displayTotal)}</span>
+                                                </div>
                                             </div>
+
+                                            {/* 配合款卡片 */}
                                             <div className="bg-white p-6 rounded-xl shadow-sm border border-sky-300 relative overflow-hidden">
                                                 <div className="flex justify-between items-center mb-4">
                                                     <h4 className="text-sky-600 font-bold">配合款</h4>
-                                                    <div className={`text-2xl font-bold ${summaryStats.matching.remaining < 0 ? 'text-red-600' : 'text-sky-600'}`}>{formatCurrency(summaryStats.matching.remaining)}<span className="text-sm text-slate-400 font-normal ml-1">剩餘</span></div>
+                                                    <div className={`text-2xl font-bold ${summaryStats.matching.displayRemaining < 0 ? 'text-red-600' : 'text-sky-600'}`}>
+                                                        {formatCurrency(summaryStats.matching.displayRemaining)}
+                                                        <span className="text-sm text-slate-400 font-normal ml-1">剩餘</span>
+                                                    </div>
                                                 </div>
-                                                <div className="w-full bg-slate-100 rounded-full h-2 mb-2"><div className={`h-2 rounded-full ${summaryStats.matching.ratio > 100 ? 'bg-red-500' : 'bg-sky-400'}`} style={{ width: `${Math.min(summaryStats.matching.ratio, 100)}%` }}></div></div>
-                                                <div className="flex justify-between text-sm text-slate-500"><span>已用: {formatCurrency(summaryStats.matching.used)}</span><span>總額: {formatCurrency(summaryStats.matching.budget)}</span></div>
+                                                <div className="w-full bg-slate-100 rounded-full h-2 mb-2">
+                                                    <div className={`h-2 rounded-full ${summaryStats.matching.ratio > 100 ? 'bg-red-500' : 'bg-sky-400'}`} style={{ width: `${Math.min(summaryStats.matching.ratio, 100)}%` }}></div>
+                                                </div>
+                                                <div className="flex justify-between text-sm text-slate-500">
+                                                    <span>已用(已歸檔): {formatCurrency(summaryStats.matching.displayUsed)}</span>
+                                                    <span>總額: {formatCurrency(summaryStats.matching.displayTotal)}</span>
+                                                </div>
                                             </div>
                                         </div>
+                                        
                                         <div className="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden">
                                             <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-100">
                                                 <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2"><Table className="h-5 w-5 text-slate-600" /> 計畫執行狀況 ({currentYear}年)</h3>
@@ -900,7 +997,6 @@
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px]">支出總計</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px] font-bold">剩餘金額</th>
                                                             <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">執行率</th>
-                                                            <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">流用狀態</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 bg-green-50 text-green-800 min-w-[90px]">已歸檔</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 bg-yellow-50 text-yellow-800 min-w-[90px]">送核銷</th>
                                                             <th className="px-4 py-3 text-right bg-red-50 text-red-800 min-w-[90px]">未核銷</th>
@@ -919,14 +1015,24 @@
                                                                         {proj.isOverLimit && <span className="text-[10px] text-red-500">(超支)</span>}
                                                                     </div>
                                                                 </td>
-                                                                <td className="px-4 py-3 text-center border-r border-slate-200">
-                                                                    {proj.isOverLimit ? <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 超支違規</span> : proj.isFlowing ? <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 流用中</span> : <span className="text-xs text-slate-400">-</span>}
-                                                                </td>
                                                                 <td className="px-4 py-3 text-right text-green-700 border-r border-slate-200 bg-green-50/30">{proj.archived > 0 ? formatCurrency(proj.archived) : '-'}</td>
                                                                 <td className="px-4 py-3 text-right text-yellow-700 border-r border-slate-200 bg-yellow-50/30">{proj.submitted > 0 ? formatCurrency(proj.submitted) : '-'}</td>
                                                                 <td className="px-4 py-3 text-right text-red-700 bg-red-50/30">{proj.unsubmitted > 0 ? formatCurrency(proj.unsubmitted) : '-'}</td>
                                                             </tr>
                                                         ))}
+                                                        {/* Total Row */}
+                                                        <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">
+                                                            <td className="px-4 py-3 text-center border-r border-slate-300">總計</td>
+                                                            <td className="px-4 py-3 text-right border-r border-slate-300">{formatCurrency(dashboardTotals.totalBudget)}</td>
+                                                            <td className="px-4 py-3 text-right border-r border-slate-300">{formatCurrency(dashboardTotals.totalUsed)}</td>
+                                                            <td className={`px-4 py-3 text-right border-r border-slate-300 ${dashboardTotals.remaining < 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(dashboardTotals.remaining)}</td>
+                                                            <td className="px-4 py-3 text-center border-r border-slate-300">
+                                                                {dashboardTotals.totalBudget > 0 ? ((dashboardTotals.totalUsed / dashboardTotals.totalBudget) * 100).toFixed(2) : '0.00'}%
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right border-r border-slate-300 bg-green-100 text-green-900">{formatCurrency(dashboardTotals.archived)}</td>
+                                                            <td className="px-4 py-3 text-right border-r border-slate-300 bg-yellow-100 text-yellow-900">{formatCurrency(dashboardTotals.submitted)}</td>
+                                                            <td className="px-4 py-3 text-right bg-red-100 text-red-900">{formatCurrency(dashboardTotals.unsubmitted)}</td>
+                                                        </tr>
                                                     </tbody>
                                                 </table>
                                             </div>
@@ -1185,7 +1291,7 @@
                                                                             </span>
                                                                         )}
                                                                         <span>{group.activityName}</span>
-                                                                        <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">{group.items.length} 筆</span>
+                                                                        <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">{group.items.length} 筆明細</span>
                                                                     
                                                                         {/* Group Edit Button */}
                                                                         {group.status === '未核銷' && (
@@ -1412,7 +1518,9 @@
                                                 <h3 className="font-bold text-lg flex items-center gap-2"><Search className="h-5 w-5" /> 查詢統計</h3>
                                             </div>
                                             <div className="p-6">
-                                                <div className="flex gap-2 mb-6">
+                                                
+                                                {/* 1. 搜尋區 */}
+                                                <div className="flex gap-2 mb-8">
                                                     <div className="relative flex-1">
                                                         <User className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
                                                         <input 
@@ -1425,8 +1533,9 @@
                                                     </div>
                                                 </div>
 
-                                                {searchResult && (
-                                                    <div className="space-y-6 animate-fade-in-down">
+                                                {/* 2. 搜尋結果 (如果有輸入搜尋) */}
+                                                {searchQuery && searchResult && (
+                                                    <div className="space-y-6 animate-fade-in-down mb-8">
                                                         <div className="grid grid-cols-2 gap-4">
                                                             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-center">
                                                                 <p className="text-sm text-slate-500 mb-1">總筆數</p>
@@ -1466,6 +1575,87 @@
                                                                     <p>沒有找到符合 "{searchQuery}" 的資料</p>
                                                                 </div>
                                                             )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* 3. 年度對象名錄 (沒有搜尋時顯示) */}
+                                                {!searchQuery && (
+                                                    <div>
+                                                        <h4 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                                            <Users className="w-5 h-5 text-blue-500" /> 年度對象名錄
+                                                        </h4>
+                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                            
+                                                            {/* 業師 */}
+                                                            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                                                                <div className="flex items-center gap-2 mb-3 text-blue-700 font-bold border-b border-slate-200 pb-2">
+                                                                    <GraduationCap className="w-4 h-4" /> 業師清單
+                                                                </div>
+                                                                <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                                                    {payeeSummary['業師']?.map((item, idx) => (
+                                                                        <button 
+                                                                            key={idx}
+                                                                            onClick={() => handlePayeeClick(item.name)}
+                                                                            className="flex justify-between items-center text-sm p-2 rounded hover:bg-white hover:shadow-sm transition-all text-left group"
+                                                                        >
+                                                                            <span className="font-medium text-slate-700 group-hover:text-blue-600">{item.name}</span>
+                                                                            <div className="text-right">
+                                                                                <div className="text-xs font-bold text-slate-600">{formatCurrency(item.total)}</div>
+                                                                                <div className="text-[10px] text-slate-400">{item.count} 筆</div>
+                                                                            </div>
+                                                                        </button>
+                                                                    ))}
+                                                                    {payeeSummary['業師']?.length === 0 && <p className="text-xs text-slate-400 text-center py-4">無資料</p>}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* 個人 */}
+                                                            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                                                                <div className="flex items-center gap-2 mb-3 text-emerald-700 font-bold border-b border-slate-200 pb-2">
+                                                                    <User className="w-4 h-4" /> 個人清單
+                                                                </div>
+                                                                <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                                                    {payeeSummary['個人']?.map((item, idx) => (
+                                                                        <button 
+                                                                            key={idx}
+                                                                            onClick={() => handlePayeeClick(item.name)}
+                                                                            className="flex justify-between items-center text-sm p-2 rounded hover:bg-white hover:shadow-sm transition-all text-left group"
+                                                                        >
+                                                                            <span className="font-medium text-slate-700 group-hover:text-emerald-600">{item.name}</span>
+                                                                            <div className="text-right">
+                                                                                <div className="text-xs font-bold text-slate-600">{formatCurrency(item.total)}</div>
+                                                                                <div className="text-[10px] text-slate-400">{item.count} 筆</div>
+                                                                            </div>
+                                                                        </button>
+                                                                    ))}
+                                                                    {payeeSummary['個人']?.length === 0 && <p className="text-xs text-slate-400 text-center py-4">無資料</p>}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* 廠商 */}
+                                                            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                                                                <div className="flex items-center gap-2 mb-3 text-orange-700 font-bold border-b border-slate-200 pb-2">
+                                                                    <Building2 className="w-4 h-4" /> 廠商清單
+                                                                </div>
+                                                                <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                                                    {payeeSummary['廠商']?.map((item, idx) => (
+                                                                        <button 
+                                                                            key={idx}
+                                                                            onClick={() => handlePayeeClick(item.name)}
+                                                                            className="flex justify-between items-center text-sm p-2 rounded hover:bg-white hover:shadow-sm transition-all text-left group"
+                                                                        >
+                                                                            <span className="font-medium text-slate-700 group-hover:text-orange-600">{item.name}</span>
+                                                                            <div className="text-right">
+                                                                                <div className="text-xs font-bold text-slate-600">{formatCurrency(item.total)}</div>
+                                                                                <div className="text-[10px] text-slate-400">{item.count} 筆</div>
+                                                                            </div>
+                                                                        </button>
+                                                                    ))}
+                                                                    {payeeSummary['廠商']?.length === 0 && <p className="text-xs text-slate-400 text-center py-4">無資料</p>}
+                                                                </div>
+                                                            </div>
+
                                                         </div>
                                                     </div>
                                                 )}
