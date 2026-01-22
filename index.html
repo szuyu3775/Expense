@@ -292,7 +292,7 @@
                 }
             }, [searchQuery, currentYearTransactions, activeTab]);
 
-            // 年度對象名錄計算 (新功能)
+            // 年度對象名錄計算
             const payeeSummary = useMemo(() => {
                 const summary = { '業師': [], '個人': [], '廠商': [] };
                 const map = {}; 
@@ -312,7 +312,6 @@
                     }
                 });
 
-                // Sort by total amount desc
                 Object.keys(summary).forEach(cat => {
                     summary[cat].sort((a, b) => b.total - a.total);
                 });
@@ -356,7 +355,6 @@
                 return { rows, colTotals, grandTotal };
             }, [currentYearTransactions, projects]);
 
-            // 統計計算邏輯
             const projectStats = useMemo(() => {
                 const statsMap = {};
                 projects.forEach(p => {
@@ -396,7 +394,6 @@
                 });
             }, [projects, currentYearTransactions, yearlyBudgets, currentYear]);
 
-            // 計算儀表板總計列
             const dashboardTotals = useMemo(() => {
                 return projectStats.reduce((acc, curr) => ({
                     totalBudget: acc.totalBudget + curr.totalBudget,
@@ -684,6 +681,17 @@
 
             const handleOpenStatusModal = (e, type, items) => {
                 e.stopPropagation();
+                
+                let defaultInputValue = '';
+                
+                if (type === 'promote_to_archived') {
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    defaultInputValue = `${yyyy}-${mm}-${dd}`;
+                }
+
                 if (type === 'rollback_to_pending') {
                     setModalConfig({ isOpen: true, type: 'confirm_rollback_to_pending', items, inputValue: '' });
                     return;
@@ -692,7 +700,7 @@
                     setModalConfig({ isOpen: true, type: 'confirm_rollback_to_submitted', items, inputValue: '' });
                     return;
                 }
-                setModalConfig({ isOpen: true, type, items, inputValue: '' });
+                setModalConfig({ isOpen: true, type, items, inputValue: defaultInputValue });
             };
 
             const handleStatusSubmit = async (e) => {
@@ -783,7 +791,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">© 2025 Expense Tracker Pro</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v2.6.1 | 更新時間：2026/01/22 09:30</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v2.6.2 | 更新時間：2026/01/22 10:10</p>
                             </div>
                         </div>
                     </div>
@@ -792,7 +800,6 @@
 
             return (
                 <div className="min-h-screen bg-slate-50 text-slate-800 font-sans relative">
-                    {/* 遮罩 */}
                     {(isLoading || isSaving) && (
                         <div className="fixed inset-0 bg-white/60 z-50 flex items-center justify-center backdrop-blur-sm">
                             <div className="flex flex-col items-center p-6 bg-white rounded-xl shadow-xl border border-slate-100">
@@ -997,6 +1004,7 @@
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px]">支出總計</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 min-w-[100px] font-bold">剩餘金額</th>
                                                             <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">執行率</th>
+                                                            <th className="px-4 py-3 text-center border-r border-slate-300 min-w-[80px]">流用狀態</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 bg-green-50 text-green-800 min-w-[90px]">已歸檔</th>
                                                             <th className="px-4 py-3 text-right border-r border-slate-300 bg-yellow-50 text-yellow-800 min-w-[90px]">送核銷</th>
                                                             <th className="px-4 py-3 text-right bg-red-50 text-red-800 min-w-[90px]">未核銷</th>
@@ -1015,6 +1023,9 @@
                                                                         {proj.isOverLimit && <span className="text-[10px] text-red-500">(超支)</span>}
                                                                     </div>
                                                                 </td>
+                                                                <td className="px-4 py-3 text-center border-r border-slate-200">
+                                                                    {proj.isOverLimit ? <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 超支違規</span> : proj.isFlowing ? <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-bold"><Shuffle className="w-3 h-3 mr-1" /> 流用中</span> : <span className="text-xs text-slate-400">-</span>}
+                                                                </td>
                                                                 <td className="px-4 py-3 text-right text-green-700 border-r border-slate-200 bg-green-50/30">{proj.archived > 0 ? formatCurrency(proj.archived) : '-'}</td>
                                                                 <td className="px-4 py-3 text-right text-yellow-700 border-r border-slate-200 bg-yellow-50/30">{proj.submitted > 0 ? formatCurrency(proj.submitted) : '-'}</td>
                                                                 <td className="px-4 py-3 text-right text-red-700 bg-red-50/30">{proj.unsubmitted > 0 ? formatCurrency(proj.unsubmitted) : '-'}</td>
@@ -1029,6 +1040,7 @@
                                                             <td className="px-4 py-3 text-center border-r border-slate-300">
                                                                 {dashboardTotals.totalBudget > 0 ? ((dashboardTotals.totalUsed / dashboardTotals.totalBudget) * 100).toFixed(2) : '0.00'}%
                                                             </td>
+                                                            <td className="px-4 py-3 text-center border-r border-slate-300">-</td>
                                                             <td className="px-4 py-3 text-right border-r border-slate-300 bg-green-100 text-green-900">{formatCurrency(dashboardTotals.archived)}</td>
                                                             <td className="px-4 py-3 text-right border-r border-slate-300 bg-yellow-100 text-yellow-900">{formatCurrency(dashboardTotals.submitted)}</td>
                                                             <td className="px-4 py-3 text-right bg-red-100 text-red-900">{formatCurrency(dashboardTotals.unsubmitted)}</td>
