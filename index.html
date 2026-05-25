@@ -196,11 +196,13 @@
                     const transData = transResponse.data || [];
                     const budgetData = budgetResponse.data || [];
 
-                    // 處理 Google Sheets 自動將「4/22」這類字串轉換為 ISO 時間的問題
                     const formatIfDate = (val) => {
-                        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(val)) {
+                        // 放寬正則表達式，確保只要是 ISO 日期開頭就能轉換
+                        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)) {
                             const d = new Date(val);
-                            return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+                            if (!isNaN(d.getTime())) {
+                                return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+                            }
                         }
                         return val;
                     };
@@ -511,14 +513,18 @@
                         displayUsed: subsidyDisplayUsed,
                         displayRemaining: subsidyDisplayRemaining,
                         displayTotal: subsidy.budget,
-                        ratio: subsidyRatio
+                        ratio: subsidyRatio,
+                        used: subsidy.used,        // <-- 補回已用金額
+                        budget: subsidy.budget     // <-- 補回總預算金額
                     },
                     matching: { 
                         remaining: matchingRemaining,
                         displayUsed: matchingDisplayUsed,
                         displayRemaining: matchingDisplayRemaining,
                         displayTotal: matching.budget,
-                        ratio: matchingRatio
+                        ratio: matchingRatio,
+                        used: matching.used,       // <-- 補回已用金額
+                        budget: matching.budget    // <-- 補回總預算金額
                     }
                 };
             }, [projectStats]);
@@ -974,7 +980,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">開發人員：梁楒侑</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v3.4.1 (修復防呆機制) | 2026/04/09</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v3.4.2 (修正日期顯示與數值) | 2026/04/09</p>
                             </div>
                         </div>
                     </div>
