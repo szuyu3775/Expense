@@ -3,31 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>資源教室職輔計畫經費控管系統2026</title>
-    
+    <title>資源教室職輔計畫經費控管系統</title>
     <!-- 1. 載入樣式工具 (Tailwind) -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- 2. 統一使用 UMD 載入 React 與 ReactDOM，確保網頁只有一個 React 實體 -->
-    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
     
-    <!-- 3. 載入 Lucide 圖示庫 (Vanilla JS 版本，避免 lucide-react 的 UMD 依賴衝突) -->
-    <script crossorigin src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
-    
-    <!-- 4. 載入翻譯機 (Babel) -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- ★ 解決 Babel import 錯誤的終極方案 ★ -->
-    <script>
-        // 註冊自訂的 Babel preset，強制將 React 的 JSX 處理模式設為 'classic'
-        // 這樣編譯器就會輸出 React.createElement，而不會自動產生 import 語句
-        Babel.registerPreset('react-classic', {
-            presets: [
-                [Babel.availablePresets['react'], { runtime: 'classic' }]
-            ]
-        });
+    <!-- 2. 設定 ES Module 模組地圖 (解決模組解析與 JSX Runtime 問題) -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+            "lucide-react": "https://esm.sh/lucide-react@0.263.1?external=react"
+        }
+    }
     </script>
+    
+    <!-- 3. 載入翻譯機 (Babel)，讓瀏覽器看懂您的程式碼 -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <!-- 設定 Tailwind 自定義動畫 -->
     <script>
@@ -52,79 +45,17 @@
     <div id="root"></div>
 
     <!-- ★★★ 主程式碼開始 ★★★ -->
-    <!-- 透過 data-presets 指定使用我們剛剛註冊的 react-classic -->
-    <script type="text/babel" data-presets="react-classic">
-        // 1. 從全域變數 React 取出 Hooks
-        const { useState, useEffect, useMemo, useCallback } = window.React;
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo, useCallback } from 'react';
+        import { createRoot } from 'react-dom/client';
         
-        // 2. 自訂 Lucide 圖示元件 (完美取代有缺陷的 lucideReact UMD)
-        const Icon = ({ name, className, ...props }) => {
-            const iconData = window.lucide?.icons[name];
-            if (!iconData) return null;
-
-            const createReactElement = ([tag, attrs, children], index, isRoot = false) => {
-                const reactAttrs = { key: index };
-                for (const [key, value] of Object.entries(attrs)) {
-                    if (key === 'class') {
-                        reactAttrs.className = value;
-                    } else {
-                        // 將 kebab-case 轉換為 camelCase (例如 stroke-width -> strokeWidth)
-                        reactAttrs[key.replace(/-([a-z])/g, g => g[1].toUpperCase())] = value;
-                    }
-                }
-                if (isRoot) {
-                    if (className) reactAttrs.className = `${reactAttrs.className || ''} ${className}`.trim();
-                    Object.assign(reactAttrs, props);
-                }
-                return window.React.createElement(
-                    tag, 
-                    reactAttrs, 
-                    (children || []).map((child, i) => createReactElement(child, i, false))
-                );
-            };
-
-            return createReactElement(iconData, 0, true);
-        };
-
-        // 綁定所需的所有圖示
-        const PlusCircle = (p) => <Icon name="plus-circle" {...p} />;
-        const Wallet = (p) => <Icon name="wallet" {...p} />;
-        const FileText = (p) => <Icon name="file-text" {...p} />;
-        const AlertCircle = (p) => <Icon name="alert-circle" {...p} />;
-        const Save = (p) => <Icon name="save" {...p} />;
-        const X = (p) => <Icon name="x" {...p} />;
-        const Table = (p) => <Icon name="table" {...p} />;
-        const Trash2 = (p) => <Icon name="trash-2" {...p} />;
-        const Plus = (p) => <Icon name="plus" {...p} />;
-        const CheckCircle2 = (p) => <Icon name="check-circle-2" {...p} />;
-        const Calendar = (p) => <Icon name="calendar" {...p} />;
-        const ClipboardList = (p) => <Icon name="clipboard-list" {...p} />;
-        const Coins = (p) => <Icon name="coins" {...p} />;
-        const ChevronDown = (p) => <Icon name="chevron-down" {...p} />;
-        const ChevronRight = (p) => <Icon name="chevron-right" {...p} />;
-        const Settings = (p) => <Icon name="settings" {...p} />;
-        const Shuffle = (p) => <Icon name="shuffle" {...p} />;
-        const Pencil = (p) => <Icon name="pencil" {...p} />;
-        const Check = (p) => <Icon name="check" {...p} />;
-        const Loader2 = (p) => <Icon name="loader-2" {...p} />;
-        const ArrowRightCircle = (p) => <Icon name="arrow-right-circle" {...p} />;
-        const CheckCircle = (p) => <Icon name="check-circle" {...p} />;
-        const RotateCcw = (p) => <Icon name="rotate-ccw" {...p} />;
-        const Lock = (p) => <Icon name="lock" {...p} />;
-        const RefreshCcw = (p) => <Icon name="refresh-ccw" {...p} />;
-        const KeyRound = (p) => <Icon name="key-round" {...p} />;
-        const LogOut = (p) => <Icon name="log-out" {...p} />;
-        const Search = (p) => <Icon name="search" {...p} />;
-        const User = (p) => <Icon name="user" {...p} />;
-        const Filter = (p) => <Icon name="filter" {...p} />;
-        const ListFilter = (p) => <Icon name="list-filter" {...p} />;
-        const Edit = (p) => <Icon name="edit" {...p} />;
-        const BarChart2 = (p) => <Icon name="bar-chart-2" {...p} />;
-        const Users = (p) => <Icon name="users" {...p} />;
-        const Building2 = (p) => <Icon name="building-2" {...p} />;
-        const GraduationCap = (p) => <Icon name="graduation-cap" {...p} />;
-        const School = (p) => <Icon name="school" {...p} />;
-        const Briefcase = (p) => <Icon name="briefcase" {...p} />;
+        // 從網路上載入圖示庫
+        import { 
+            PlusCircle, Wallet, FileText, AlertCircle, Save, X, Table, Trash2, Plus, 
+            CheckCircle2, Calendar, ClipboardList, Coins, ChevronDown, 
+            ChevronRight, Settings, Shuffle, Pencil, Check, Loader2, ArrowRightCircle, 
+            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Filter, ListFilter, Edit, BarChart2, Users, Building2, GraduationCap, School, Briefcase
+        } from 'lucide-react';
 
         // --- 設定區 (多校設定) ---
         const SCHOOL_CONFIG = {
@@ -140,6 +71,7 @@
 
         // --- 常數定義 ---
         const EXPENSE_TYPES = ['鐘點費', '諮詢費', '出席費', '補充保費', '餐點費', '材料費', '交通費', '保險費', '雜支', '差旅費', '教材費'];
+        
         const EXPENSE_SORT_ORDER = { '鐘點費': 1, '諮詢費': 2, '出席費': 3, '補充保費': 4, '餐點費': 5, '材料費': 6, '交通費': 7, '保險費': 8, '雜支': 9, '差旅費': 10, '教材費': 11 };
         const PAYEE_CATEGORIES = ['業師', '個人', '廠商', '勞健保'];
         const BUSINESS_CATEGORIES = ['會報', '活動', '出差', '採購']; 
@@ -239,7 +171,8 @@
                 archiveDate: '',
                 businessCategory: '會報' 
             });
-            const [batchItems, setBatchItems] = useState([{ id: Date.now(), project: projects[0].name, expenseType: '諮詢費', item: '', payeeCategory: '業師', payeeName: '', unitPrice: '', quantity: 1 }]);
+            // 初始化給一個帶亂數的 ID，避免快速點擊出錯
+            const [batchItems, setBatchItems] = useState([{ id: Date.now() + Math.random(), project: projects[0].name, expenseType: '諮詢費', item: '', payeeCategory: '業師', payeeName: '', unitPrice: '', quantity: 1 }]);
             
             const [expandedGroups, setExpandedGroups] = useState({});
             const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', items: [], inputValue: '' });
@@ -274,8 +207,10 @@
                     const budgetData = budgetResponse.data || [];
 
                     const formatIfDate = (val) => {
-                        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)) {
-                            const d = new Date(val);
+                        if (!val) return val;
+                        const strVal = String(val).trim();
+                        if (strVal.includes('T') && strVal.includes('Z') && strVal.length >= 20) {
+                            const d = new Date(strVal);
                             if (!isNaN(d.getTime())) {
                                 return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
                             }
@@ -410,7 +345,7 @@
                         });
                     }
                 }
-            }, [fetchAllData]); 
+            }, []); 
 
             useEffect(() => {
                 setBatchHeader(prev => ({ ...prev, year: currentYear }));
@@ -590,8 +525,8 @@
                         displayRemaining: subsidyDisplayRemaining,
                         displayTotal: subsidy.budget,
                         ratio: subsidyRatio,
-                        used: subsidy.used,        // <-- 補回已用金額
-                        budget: subsidy.budget     // <-- 補回總預算金額
+                        used: subsidy.used,
+                        budget: subsidy.budget
                     },
                     matching: { 
                         remaining: matchingRemaining,
@@ -599,8 +534,8 @@
                         displayRemaining: matchingDisplayRemaining,
                         displayTotal: matching.budget,
                         ratio: matchingRatio,
-                        used: matching.used,       // <-- 補回已用金額
-                        budget: matching.budget    // <-- 補回總預算金額
+                        used: matching.used,
+                        budget: matching.budget
                     }
                 };
             }, [projectStats]);
@@ -692,8 +627,9 @@
             const addItemRow = () => {
                 setBatchItems(prev => {
                     const lastItem = prev[prev.length - 1];
+                    // 加入亂數確保連續點擊時的 ID 絕對不重複
                     return [...prev, { 
-                        id: Date.now(), 
+                        id: Date.now() + Math.random(), 
                         project: lastItem ? lastItem.project : projects[0].name, 
                         expenseType: lastItem ? lastItem.expenseType : '諮詢費', 
                         item: '', 
@@ -713,7 +649,7 @@
             const addPremiumRow = () => {
                 const eligible = batchItems.reduce((sum, i) => PREMIUM_ELIGIBLE_TYPES.includes(i.expenseType) ? sum + (Number(i.unitPrice)*Number(i.quantity)) : sum, 0);
                 if (eligible <= 0) { showNotification('無符合項目', 'error'); return; }
-                setBatchItems(prev => [...prev, { id: Date.now(), project: projects[0].name, expenseType: '補充保費', item: '二代健保補充保費', payeeCategory: '勞健保', payeeName: '22565124代扣保費', unitPrice: Math.round(eligible*PREMIUM_RATE), quantity: 1 }]);
+                setBatchItems(prev => [...prev, { id: Date.now() + Math.random(), project: projects[0].name, expenseType: '補充保費', item: '二代健保補充保費', payeeCategory: '勞健保', payeeName: '22565124代扣保費', unitPrice: Math.round(eligible*PREMIUM_RATE), quantity: 1 }]);
                 showNotification('已新增保費', 'success');
             };
 
@@ -757,7 +693,7 @@
                     await fetchAllData(authKey); 
                     showNotification('新增成功', 'success');
                     setBatchHeader(prev => ({...prev, id: '', activityName: '', archiveDate: ''}));
-                    setBatchItems([{ id: Date.now(), project: projects[0].name, expenseType: '諮詢費', item: '', payeeCategory: '業師', payeeName: '', unitPrice: '', quantity: 1 }]);
+                    setBatchItems([{ id: Date.now() + Math.random(), project: projects[0].name, expenseType: '諮詢費', item: '', payeeCategory: '業師', payeeName: '', unitPrice: '', quantity: 1 }]);
                 } else {
                     showNotification('儲存失敗，請重試', 'error');
                 }
@@ -790,10 +726,16 @@
                 const projectDef = projects.find(p => p.name === editFormData.project);
                 const stats = projectStats.find(s => s.name === editFormData.project);
 
-                // 2. 預算超支防呆
+                // 2. 預算超支防呆 (修正切換計畫時的邏輯漏洞)
                 if (projectDef && stats) {
-                    // 如果是追加的新項目(temp_)，原本金額為 0；若是修改，則取得修改前的金額
-                    const oldAmount = String(editFormData.uid).startsWith('temp_') ? 0 : (transactions.find(t => t.uid === editFormData.uid)?.amount || 0);
+                    // 找出原本在資料庫裡的那筆紀錄
+                    const originalTx = transactions.find(t => t.uid === editFormData.uid);
+                    // 判斷是否為新增的「臨時明細」，或是「更改了經費來源」
+                    const isProjectChanged = originalTx && originalTx.project !== editFormData.project;
+                    const isNewItem = String(editFormData.uid).startsWith('temp_');
+
+                    // 如果是新項目或換了計畫，這筆金額對「新計畫」來說就是全新的花費 (不扣除舊金額)
+                    const oldAmount = (isNewItem || isProjectChanged) ? 0 : (originalTx?.amount || 0);
                     const diff = newAmount - oldAmount;
 
                     // 檢查異動後的金額是否超過該計畫的剩餘預算
@@ -809,7 +751,7 @@
                 setSavingMessage('更新資料中...');
                 let success = false;
 
-                // 判判斷是「更新舊資料」還是「儲存新追加的明細」
+                // 判斷是「更新舊資料」還是「儲存新追加的明細」
                 if (String(updatedItem.uid).startsWith('temp_')) {
                     const newTrans = { ...updatedItem, uid: `new_${Date.now()}_0`, id: '' };
                     success = await postToGAS('createBatch', [newTrans]);
@@ -1031,7 +973,10 @@
                                 ) : (
                                     <div className="animate-fade-in">
                                         <div className="flex justify-between items-center mb-4">
-                                            <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{SCHOOL_CONFIG[selectedSchool].name}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{SCHOOL_CONFIG[selectedSchool].name}</span>
+                                                <span className="text-[10px] text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded bg-white">v3.4.5 (26/06/23)</span>
+                                            </div>
                                             <button type="button" onClick={() => { setSelectedSchool(''); localStorage.removeItem('expense_app_school'); }} className="text-xs text-slate-400 hover:text-red-500">切換學校</button>
                                         </div>
                                         <div className="mb-4">
@@ -1056,7 +1001,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">開發人員：梁楒侑</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v3.4.4 (完美 UMD 相容版) | 2026/06/23</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v3.4.5 (修補安全邏輯) | 2026/06/23</p>
                             </div>
                         </div>
                     </div>
@@ -1124,9 +1069,14 @@
                             <div className="flex justify-between items-center h-16">
                                 <div className="flex items-center gap-2">
                                     <div className="bg-blue-600 p-2 rounded-lg"><Wallet className="h-6 w-6 text-white" /></div>
-                                    <span className="font-bold text-xl text-slate-800 tracking-tight">
-                                        {SCHOOL_CONFIG[selectedSchool]?.name || '資源教室職輔計畫經費控管系統'}
-                                    </span>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="font-bold text-xl text-slate-800 tracking-tight">
+                                            {SCHOOL_CONFIG[selectedSchool]?.name || '資源教室職輔計畫經費控管系統'}
+                                        </span>
+                                        <span className="hidden sm:inline-block text-[10px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                            v3.4.5 | 26/06/23
+                                        </span>
+                                    </div>
                                 </div>
                                 <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg">
                                     {['dashboard', 'entry', 'log', 'report', 'query', 'settings'].map(tab => (
@@ -1557,7 +1507,7 @@
                                                                         )}
                                                                         <span>{group.activityName}</span>
                                                                         <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">{group.items.length} 筆</span>
-                                                                        
+                                                                    
                                                                         {group.status === '未核銷' && (
                                                                             <button 
                                                                                 onClick={(e) => { e.stopPropagation(); handleStartGroupEdit(group); }} 
@@ -1736,7 +1686,7 @@
         }
 
         // --- 啟動 React ---
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        const root = createRoot(document.getElementById('root'));
         root.render(<ExpenseTrackerApp />);
     </script>
 </body>
