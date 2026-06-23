@@ -4,15 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>資源教室職輔計畫經費控管系統2026</title>
+    
     <!-- 1. 載入樣式工具 (Tailwind) -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 2. 統一使用 UMD 載入 React 與 ReactDOM，確保網頁只有一個 React 實體 -->
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
     
-    <!-- 2. 載入 React 核心 (網頁引擎) -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 3. 載入 Lucide 圖示庫 (Vanilla JS 版本，避免 lucide-react 的 UMD 依賴衝突) -->
+    <script crossorigin src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
     
-    <!-- 3. 載入翻譯機 (Babel)，讓瀏覽器看懂您的程式碼 -->
+    <!-- 4. 載入翻譯機 (Babel) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- ★ 解決 Babel import 錯誤的終極方案 ★ -->
+    <script>
+        // 註冊自訂的 Babel preset，強制將 React 的 JSX 處理模式設為 'classic'
+        // 這樣編譯器就會輸出 React.createElement，而不會自動產生 import 語句
+        Babel.registerPreset('react-classic', {
+            presets: [
+                [Babel.availablePresets['react'], { runtime: 'classic' }]
+            ]
+        });
+    </script>
     
     <!-- 設定 Tailwind 自定義動畫 -->
     <script>
@@ -37,16 +52,79 @@
     <div id="root"></div>
 
     <!-- ★★★ 主程式碼開始 ★★★ -->
-    <script type="text/babel" data-type="module">
-        const { useState, useEffect, useMemo, useCallback } = React;
+    <!-- 透過 data-presets 指定使用我們剛剛註冊的 react-classic -->
+    <script type="text/babel" data-presets="react-classic">
+        // 1. 從全域變數 React 取出 Hooks
+        const { useState, useEffect, useMemo, useCallback } = window.React;
         
-        // 從網路上載入圖示庫
-        import { 
-            PlusCircle, Wallet, FileText, AlertCircle, Save, X, Table, Trash2, Plus, 
-            CheckCircle2, Calendar, ClipboardList, Coins, ChevronDown, 
-            ChevronRight, Settings, Shuffle, Pencil, Check, Loader2, ArrowRightCircle, 
-            CheckCircle, RotateCcw, Lock, RefreshCcw, KeyRound, LogOut, Search, User, Filter, ListFilter, Edit, BarChart2, Users, Building2, GraduationCap, School, Briefcase
-        } from 'https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0';
+        // 2. 自訂 Lucide 圖示元件 (完美取代有缺陷的 lucideReact UMD)
+        const Icon = ({ name, className, ...props }) => {
+            const iconData = window.lucide?.icons[name];
+            if (!iconData) return null;
+
+            const createReactElement = ([tag, attrs, children], index, isRoot = false) => {
+                const reactAttrs = { key: index };
+                for (const [key, value] of Object.entries(attrs)) {
+                    if (key === 'class') {
+                        reactAttrs.className = value;
+                    } else {
+                        // 將 kebab-case 轉換為 camelCase (例如 stroke-width -> strokeWidth)
+                        reactAttrs[key.replace(/-([a-z])/g, g => g[1].toUpperCase())] = value;
+                    }
+                }
+                if (isRoot) {
+                    if (className) reactAttrs.className = `${reactAttrs.className || ''} ${className}`.trim();
+                    Object.assign(reactAttrs, props);
+                }
+                return window.React.createElement(
+                    tag, 
+                    reactAttrs, 
+                    (children || []).map((child, i) => createReactElement(child, i, false))
+                );
+            };
+
+            return createReactElement(iconData, 0, true);
+        };
+
+        // 綁定所需的所有圖示
+        const PlusCircle = (p) => <Icon name="plus-circle" {...p} />;
+        const Wallet = (p) => <Icon name="wallet" {...p} />;
+        const FileText = (p) => <Icon name="file-text" {...p} />;
+        const AlertCircle = (p) => <Icon name="alert-circle" {...p} />;
+        const Save = (p) => <Icon name="save" {...p} />;
+        const X = (p) => <Icon name="x" {...p} />;
+        const Table = (p) => <Icon name="table" {...p} />;
+        const Trash2 = (p) => <Icon name="trash-2" {...p} />;
+        const Plus = (p) => <Icon name="plus" {...p} />;
+        const CheckCircle2 = (p) => <Icon name="check-circle-2" {...p} />;
+        const Calendar = (p) => <Icon name="calendar" {...p} />;
+        const ClipboardList = (p) => <Icon name="clipboard-list" {...p} />;
+        const Coins = (p) => <Icon name="coins" {...p} />;
+        const ChevronDown = (p) => <Icon name="chevron-down" {...p} />;
+        const ChevronRight = (p) => <Icon name="chevron-right" {...p} />;
+        const Settings = (p) => <Icon name="settings" {...p} />;
+        const Shuffle = (p) => <Icon name="shuffle" {...p} />;
+        const Pencil = (p) => <Icon name="pencil" {...p} />;
+        const Check = (p) => <Icon name="check" {...p} />;
+        const Loader2 = (p) => <Icon name="loader-2" {...p} />;
+        const ArrowRightCircle = (p) => <Icon name="arrow-right-circle" {...p} />;
+        const CheckCircle = (p) => <Icon name="check-circle" {...p} />;
+        const RotateCcw = (p) => <Icon name="rotate-ccw" {...p} />;
+        const Lock = (p) => <Icon name="lock" {...p} />;
+        const RefreshCcw = (p) => <Icon name="refresh-ccw" {...p} />;
+        const KeyRound = (p) => <Icon name="key-round" {...p} />;
+        const LogOut = (p) => <Icon name="log-out" {...p} />;
+        const Search = (p) => <Icon name="search" {...p} />;
+        const User = (p) => <Icon name="user" {...p} />;
+        const Filter = (p) => <Icon name="filter" {...p} />;
+        const ListFilter = (p) => <Icon name="list-filter" {...p} />;
+        const Edit = (p) => <Icon name="edit" {...p} />;
+        const BarChart2 = (p) => <Icon name="bar-chart-2" {...p} />;
+        const Users = (p) => <Icon name="users" {...p} />;
+        const Building2 = (p) => <Icon name="building-2" {...p} />;
+        const GraduationCap = (p) => <Icon name="graduation-cap" {...p} />;
+        const School = (p) => <Icon name="school" {...p} />;
+        const Briefcase = (p) => <Icon name="briefcase" {...p} />;
 
         // --- 設定區 (多校設定) ---
         const SCHOOL_CONFIG = {
@@ -62,7 +140,6 @@
 
         // --- 常數定義 ---
         const EXPENSE_TYPES = ['鐘點費', '諮詢費', '出席費', '補充保費', '餐點費', '材料費', '交通費', '保險費', '雜支', '差旅費', '教材費'];
-        
         const EXPENSE_SORT_ORDER = { '鐘點費': 1, '諮詢費': 2, '出席費': 3, '補充保費': 4, '餐點費': 5, '材料費': 6, '交通費': 7, '保險費': 8, '雜支': 9, '差旅費': 10, '教材費': 11 };
         const PAYEE_CATEGORIES = ['業師', '個人', '廠商', '勞健保'];
         const BUSINESS_CATEGORIES = ['會報', '活動', '出差', '採購']; 
@@ -197,7 +274,6 @@
                     const budgetData = budgetResponse.data || [];
 
                     const formatIfDate = (val) => {
-                        // 放寬正則表達式，確保只要是 ISO 日期開頭就能轉換
                         if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)) {
                             const d = new Date(val);
                             if (!isNaN(d.getTime())) {
@@ -334,7 +410,7 @@
                         });
                     }
                 }
-            }, []); 
+            }, [fetchAllData]); 
 
             useEffect(() => {
                 setBatchHeader(prev => ({ ...prev, year: currentYear }));
@@ -733,7 +809,7 @@
                 setSavingMessage('更新資料中...');
                 let success = false;
 
-                // 判斷是「更新舊資料」還是「儲存新追加的明細」
+                // 判判斷是「更新舊資料」還是「儲存新追加的明細」
                 if (String(updatedItem.uid).startsWith('temp_')) {
                     const newTrans = { ...updatedItem, uid: `new_${Date.now()}_0`, id: '' };
                     success = await postToGAS('createBatch', [newTrans]);
@@ -980,7 +1056,7 @@
                             </form>
                             <div className="text-center mt-6">
                                 <p className="text-xs text-slate-400">開發人員：梁楒侑</p>
-                                <p className="text-[10px] text-slate-300 mt-1">v3.4.2 (修正日期顯示與數值) | 2026/04/09</p>
+                                <p className="text-[10px] text-slate-300 mt-1">v3.4.4 (完美 UMD 相容版) | 2026/06/23</p>
                             </div>
                         </div>
                     </div>
@@ -1481,7 +1557,7 @@
                                                                         )}
                                                                         <span>{group.activityName}</span>
                                                                         <span className="ml-2 text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap">{group.items.length} 筆</span>
-                                                                    
+                                                                        
                                                                         {group.status === '未核銷' && (
                                                                             <button 
                                                                                 onClick={(e) => { e.stopPropagation(); handleStartGroupEdit(group); }} 
